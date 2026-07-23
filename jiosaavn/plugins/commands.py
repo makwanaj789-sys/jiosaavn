@@ -15,43 +15,57 @@ from pyrogram.types import (
 
 logger = logging.getLogger(__name__)
 
+# Confirm that Pyrogram actually loaded this plugin file
+print("✅ COMMANDS.PY PLUGIN LOADED", flush=True)
+
 
 # ==================== START / HOME ====================
 
-@Bot.on_callback_query(filters.regex('^home$'))
-@Bot.on_message(filters.command('start') & filters.private)
-async def start(c, m):
+@Bot.on_callback_query(filters.regex(r"^home$"))
+@Bot.on_message(filters.command("start") & filters.private)
+async def start(client: Bot, message: Message | CallbackQuery):
 
     print("START DEBUG 1: /start handler triggered", flush=True)
 
     try:
-        # Callback query me actual message yahan milega
-        if isinstance(m, CallbackQuery):
-            user = m.from_user
-            msg = m.message
-            await m.answer()
+        # Callback query
+        if isinstance(message, CallbackQuery):
+            user = message.from_user
+            msg = message.message
+            await message.answer()
+
+        # Normal /start command
         else:
-            user = m.from_user
+            user = message.from_user
             msg = None
 
-        print(f"START DEBUG 2: user = {user.id}", flush=True)
+        print(
+            f"START DEBUG 2: user = {user.id}",
+            flush=True
+        )
 
-        last_name = f" {user.last_name}" if user.last_name else ""
+        last_name = (
+            f" {user.last_name}"
+            if user.last_name
+            else ""
+        )
 
         mention = (
-            f"[{user.first_name}{last_name}](tg://user?id={user.id})"
+            f"[{user.first_name}{last_name}]"
+            f"(tg://user?id={user.id})"
             if user.first_name
             else f"[User](tg://user?id={user.id})"
         )
 
-        # /start command se aaya hai
+        # If /start command was sent normally
         if msg is None:
+
             print(
                 "START DEBUG 3: sending processing message",
                 flush=True
             )
 
-            msg = await m.reply(
+            msg = await message.reply(
                 "**Processing....⌛**",
                 quote=True
             )
@@ -126,12 +140,12 @@ async def start(c, m):
         )
 
         try:
-            if isinstance(m, CallbackQuery):
-                await m.message.edit(
+            if isinstance(message, CallbackQuery):
+                await message.message.edit(
                     "An error occurred while processing your request."
                 )
             else:
-                await m.reply(
+                await message.reply(
                     "An error occurred while processing your request."
                 )
         except Exception:
@@ -142,21 +156,27 @@ async def start(c, m):
 
 # ==================== HELP ====================
 
-@Bot.on_callback_query(filters.regex('^help$'))
-@Bot.on_message(filters.command('help') & filters.private)
+@Bot.on_callback_query(filters.regex(r"^help$"))
+@Bot.on_message(filters.command("help") & filters.private)
 async def help_handler(
     client: Bot,
     message: Message | CallbackQuery
 ):
 
-    print("HELP DEBUG: handler triggered", flush=True)
+    print(
+        "HELP DEBUG: handler triggered",
+        flush=True
+    )
 
     try:
 
         if isinstance(message, CallbackQuery):
+
             await message.answer()
             msg = message.message
+
         else:
+
             msg = await message.reply(
                 "**Processing....⌛**",
                 quote=True
@@ -207,35 +227,46 @@ async def help_handler(
         )
 
         try:
+
             if isinstance(message, CallbackQuery):
                 await message.message.edit(
                     "An error occurred while processing your request."
                 )
+
             else:
                 await message.reply(
                     "An error occurred while processing your request."
                 )
+
         except Exception:
-            pass
+            logger.exception(
+                "Could not send help error message"
+            )
 
 
 # ==================== ABOUT ====================
 
-@Bot.on_callback_query(filters.regex('^about$'))
-@Bot.on_message(filters.command('about') & filters.private)
+@Bot.on_callback_query(filters.regex(r"^about$"))
+@Bot.on_message(filters.command("about") & filters.private)
 async def about(
     client: Bot,
     message: Message | CallbackQuery
 ):
 
-    print("ABOUT DEBUG: handler triggered", flush=True)
+    print(
+        "ABOUT DEBUG: handler triggered",
+        flush=True
+    )
 
     try:
 
         if isinstance(message, CallbackQuery):
+
             await message.answer()
             msg = message.message
+
         else:
+
             msg = await message.reply(
                 "**Processing....⌛**",
                 quote=True
@@ -267,8 +298,12 @@ async def about(
         ]
 
         await msg.edit(
-            text=TEXT.ABOUT_MSG.format(me=me),
-            reply_markup=InlineKeyboardMarkup(buttons),
+            text=TEXT.ABOUT_MSG.format(
+                me=me
+            ),
+            reply_markup=InlineKeyboardMarkup(
+                buttons
+            ),
             disable_web_page_preview=True
         )
 
@@ -289,27 +324,35 @@ async def about(
         )
 
         try:
+
             if isinstance(message, CallbackQuery):
                 await message.message.edit(
                     "An error occurred while processing your request."
                 )
+
             else:
                 await message.reply(
                     "An error occurred while processing your request."
                 )
+
         except Exception:
-            pass
+            logger.exception(
+                "Could not send about error message"
+            )
 
 
 # ==================== CLOSE ====================
 
-@Bot.on_callback_query(filters.regex('^close$'))
+@Bot.on_callback_query(filters.regex(r"^close$"))
 async def close_cb(
     client: Bot,
     callback: CallbackQuery
 ):
 
-    print("CLOSE DEBUG: handler triggered", flush=True)
+    print(
+        "CLOSE DEBUG: handler triggered",
+        flush=True
+    )
 
     try:
 
@@ -320,8 +363,10 @@ async def close_cb(
         await callback.message.delete()
 
         if reply_to:
+
             try:
                 await reply_to.delete()
+
             except Exception:
                 pass
 
