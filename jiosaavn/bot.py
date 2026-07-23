@@ -17,7 +17,7 @@ class Bot(Client):
             sleep_threshold=30,
             max_concurrent_transmissions=10,
             plugins={
-                "root": "jiosaavn/plugins"
+                "root": "jiosaavn.plugins"
             }
         )
         self.db = Database(DATABASE_URL)
