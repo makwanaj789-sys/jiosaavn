@@ -1,11 +1,9 @@
 import logging
-import asyncio
-import random
 
 from jiosaavn.bot import Bot
 from jiosaavn.plugins.text import TEXT
 
-from pyrogram import Client, filters
+from pyrogram import filters
 from pyrogram.types import (
     Message,
     CallbackQuery,
@@ -15,17 +13,12 @@ from pyrogram.types import (
 
 logger = logging.getLogger(__name__)
 
-# Confirm that Pyrogram actually loaded this plugin file
-print("✅ COMMANDS.PY PLUGIN LOADED", flush=True)
-
 
 # ==================== START / HOME ====================
 
 @Bot.on_callback_query(filters.regex(r"^home$"))
 @Bot.on_message(filters.command("start") & filters.private)
 async def start(client: Bot, message: Message | CallbackQuery):
-
-    print("START DEBUG 1: /start handler triggered", flush=True)
 
     try:
         # Callback query
@@ -38,11 +31,6 @@ async def start(client: Bot, message: Message | CallbackQuery):
         else:
             user = message.from_user
             msg = None
-
-        print(
-            f"START DEBUG 2: user = {user.id}",
-            flush=True
-        )
 
         last_name = (
             f" {user.last_name}"
@@ -57,49 +45,39 @@ async def start(client: Bot, message: Message | CallbackQuery):
             else f"[User](tg://user?id={user.id})"
         )
 
-        # If /start command was sent normally
+        # If normal /start command
         if msg is None:
-
-            print(
-                "START DEBUG 3: sending processing message",
-                flush=True
-            )
-
             msg = await message.reply(
                 "**Processing....⌛**",
                 quote=True
             )
 
-            print(
-                "START DEBUG 4: processing message sent",
-                flush=True
-            )
-
+        # Updated buttons
         buttons = [
             [
                 InlineKeyboardButton(
-                    "Owner 🧑",
-                    url="https://t.me/The_proGrammerr"
-                ),
-                InlineKeyboardButton(
                     "About 📕",
                     callback_data="about"
-                )
-            ],
-            [
+                ),
                 InlineKeyboardButton(
                     "Help 💡",
                     callback_data="help"
-                ),
-                InlineKeyboardButton(
-                    "Settings ⚙",
-                    callback_data="settings"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "Open Source Repository 🌐",
-                    url="https://github.com/Ns-AnoNymouS/jiosaavn"
+                    "Settings ⚙",
+                    callback_data="settings"
+                ),
+                InlineKeyboardButton(
+                    "Updates 📢",
+                    url="https://t.me/umclon_era"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Owner 👑",
+                    url="https://t.me/umclon"
                 )
             ],
             [
@@ -110,11 +88,6 @@ async def start(client: Bot, message: Message | CallbackQuery):
             ]
         ]
 
-        print(
-            "START DEBUG 5: editing message",
-            flush=True
-        )
-
         await msg.edit(
             text=TEXT.START_MSG.format(
                 mention=mention
@@ -123,30 +96,20 @@ async def start(client: Bot, message: Message | CallbackQuery):
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
-        print(
-            "START DEBUG 6: /start completed successfully",
-            flush=True
-        )
-
     except Exception as e:
 
-        print(
-            f"START ERROR: {type(e).__name__}: {e}",
-            flush=True
-        )
-
         logger.exception(
-            "Error inside /start handler"
+            f"Error inside /start handler: {e}"
         )
 
         try:
             if isinstance(message, CallbackQuery):
                 await message.message.edit(
-                    "An error occurred while processing your request."
+                    "❌ An error occurred while processing your request."
                 )
             else:
                 await message.reply(
-                    "An error occurred while processing your request."
+                    "❌ An error occurred while processing your request."
                 )
         except Exception:
             logger.exception(
@@ -163,22 +126,15 @@ async def help_handler(
     message: Message | CallbackQuery
 ):
 
-    print(
-        "HELP DEBUG: handler triggered",
-        flush=True
-    )
-
     try:
 
         if isinstance(message, CallbackQuery):
-
             await message.answer()
             msg = message.message
 
         else:
-
             msg = await message.reply(
-                "**Processing....⌛**",
+                "**Processing-please wait....⌛**",
                 quote=True
             )
 
@@ -195,6 +151,16 @@ async def help_handler(
             ],
             [
                 InlineKeyboardButton(
+                    "Updates 📢",
+                    url="https://t.me/umclon_era"
+                ),
+                InlineKeyboardButton(
+                    "Owner 👑",
+                    url="https://t.me/umclon"
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     "Home 🏕",
                     callback_data="home"
                 ),
@@ -207,37 +173,25 @@ async def help_handler(
 
         await msg.edit(
             text=TEXT.HELP_MSG,
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-
-        print(
-            "HELP DEBUG: completed successfully",
-            flush=True
+            reply_markup=InlineKeyboardMarkup(buttons),
+            disable_web_page_preview=True
         )
 
     except Exception as e:
 
-        print(
-            f"HELP ERROR: {type(e).__name__}: {e}",
-            flush=True
-        )
-
         logger.exception(
-            "Error inside help_handler"
+            f"Error inside help_handler: {e}"
         )
 
         try:
-
             if isinstance(message, CallbackQuery):
                 await message.message.edit(
-                    "An error occurred while processing your request."
+                    "❌ An error occurred while processing your request."
                 )
-
             else:
                 await message.reply(
-                    "An error occurred while processing your request."
+                    "❌ An error occurred while processing your request."
                 )
-
         except Exception:
             logger.exception(
                 "Could not send help error message"
@@ -253,22 +207,15 @@ async def about(
     message: Message | CallbackQuery
 ):
 
-    print(
-        "ABOUT DEBUG: handler triggered",
-        flush=True
-    )
-
     try:
 
         if isinstance(message, CallbackQuery):
-
             await message.answer()
             msg = message.message
 
         else:
-
             msg = await message.reply(
-                "**Processing....⌛**",
+                "**Processing-please wait....⌛**",
                 quote=True
             )
 
@@ -283,6 +230,16 @@ async def about(
                 InlineKeyboardButton(
                     "Settings ⚙",
                     callback_data="settings"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Updates 📢",
+                    url="https://t.me/umclon_era"
+                ),
+                InlineKeyboardButton(
+                    "Owner 👑",
+                    url="https://t.me/umclon"
                 )
             ],
             [
@@ -307,34 +264,21 @@ async def about(
             disable_web_page_preview=True
         )
 
-        print(
-            "ABOUT DEBUG: completed successfully",
-            flush=True
-        )
-
     except Exception as e:
 
-        print(
-            f"ABOUT ERROR: {type(e).__name__}: {e}",
-            flush=True
-        )
-
         logger.exception(
-            "Error inside about handler"
+            f"Error inside about handler: {e}"
         )
 
         try:
-
             if isinstance(message, CallbackQuery):
                 await message.message.edit(
-                    "An error occurred while processing your request."
+                    "❌ An error occurred while processing your request."
                 )
-
             else:
                 await message.reply(
-                    "An error occurred while processing your request."
+                    "❌ An error occurred while processing your request."
                 )
-
         except Exception:
             logger.exception(
                 "Could not send about error message"
@@ -349,11 +293,6 @@ async def close_cb(
     callback: CallbackQuery
 ):
 
-    print(
-        "CLOSE DEBUG: handler triggered",
-        flush=True
-    )
-
     try:
 
         await callback.answer()
@@ -363,25 +302,13 @@ async def close_cb(
         await callback.message.delete()
 
         if reply_to:
-
             try:
                 await reply_to.delete()
-
             except Exception:
                 pass
 
-        print(
-            "CLOSE DEBUG: completed successfully",
-            flush=True
-        )
-
     except Exception as e:
 
-        print(
-            f"CLOSE ERROR: {type(e).__name__}: {e}",
-            flush=True
-        )
-
         logger.exception(
-            "Error inside close callback"
+            f"Error inside close callback: {e}"
         )
