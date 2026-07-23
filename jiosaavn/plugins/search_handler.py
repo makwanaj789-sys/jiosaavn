@@ -17,17 +17,45 @@ logger = logging.getLogger(__name__)
 
 
 # =========================================================
+# HELPERS
+# =========================================================
+
+def safe_text(value, default="Unknown"):
+    """
+    Convert None/other values safely to text.
+    Prevents html.unescape(None) and similar errors.
+    """
+    if value is None:
+        return default
+
+    try:
+        return html.unescape(str(value))
+    except Exception:
+        return default
+
+
+def safe_dict(value):
+    """Always return a dictionary."""
+    return value if isinstance(value, dict) else {}
+
+
+def safe_list(value):
+    """Always return a list."""
+    return value if isinstance(value, list) else []
+
+
+# =========================================================
 # FILTERS
 # =========================================================
 
 # PRIVATE:
-# User directly song/album/artist ka naam bhej sakta hai.
-# Commands, links aur via_bot messages ignore honge.
+# Normal text = search
+# Commands/links/via_bot ignored
 private_search_filter = (
     filters.text
     & filters.incoming
     & filters.private
-    & ~filters.regex(r"^http.*")
+    & ~filters.regex(r"^https?://")
     & ~filters.via_bot
     & ~filters.command([
         "start",
@@ -39,11 +67,8 @@ private_search_filter = (
 
 
 # GROUP:
-# Group/Supergroup me ONLY:
-#
+# Only:
 # /am song name
-#
-# par search chalega.
 group_search_filter = (
     filters.command("am")
     & filters.incoming
@@ -62,6 +87,8 @@ async def search(
     message: Message | CallbackQuery
 ):
 
+    send_msg = None
+
     try:
 
         # =================================================
@@ -75,22 +102,25 @@ async def search(
                 quote=True
             )
 
-            # ---------------------------------------------
-            # PRIVATE CHAT
-            # ---------------------------------------------
+            # =============================================
+            # PRIVATE
+            # =============================================
 
             if message.chat.type == "private":
 
-                query = message.text.strip()
+                query = (
+                    message.text or ""
+                ).strip()
 
-            # ---------------------------------------------
-            # GROUP / SUPERGROUP
-            # /am Alan Walker Spectre
-            # ---------------------------------------------
+            # =============================================
+            # GROUP
+            # =============================================
 
             else:
 
-                if len(message.command) < 2:
+                command = message.command or []
+
+                if len(command) < 2:
 
                     return await send_msg.edit(
                         "❌ Please enter a song name.\n\n"
@@ -98,31 +128,43 @@ async def search(
                         "`/am Alan Walker Spectre`"
                     )
 
-                # Everything after /am becomes query
                 query = " ".join(
-                    message.command[1:]
+                    command[1:]
                 ).strip()
 
-            # ---------------------------------------------
-            # GET USER SETTINGS
-            # ---------------------------------------------
 
-            user_data = await client.db.get_user(
-                message.from_user.id
-            )
+            # =============================================
+            # USER SETTINGS
+            # =============================================
 
-            if user_data:
-                search_type = user_data.get(
-                    "type",
-                    "all"
+            try:
+
+                user_data = await client.db.get_user(
+                    message.from_user.id
                 )
-            else:
-                search_type = "all"
+
+            except Exception:
+
+                logger.exception(
+                    "Failed to get user settings"
+                )
+
+                user_data = {}
+
+
+            if not isinstance(user_data, dict):
+                user_data = {}
+
+
+            search_type = (
+                user_data.get("type") or "all"
+            )
 
             page_no = 1
 
+
         # =================================================
-        # CALLBACK QUERY
+        # CALLBACK
         # =================================================
 
         else:
@@ -131,43 +173,74 @@ async def search(
 
             send_msg = message.message
 
-            data = message.data.split("#")
+            data = (
+                message.data or ""
+            ).split("#")
+
 
             search_type = (
                 data[1]
-                if len(data) > 1
+                if len(data) > 1 and data[1]
                 else "all"
             )
 
+
             page_no = 1
+
 
             if len(data) >= 3:
 
                 try:
-                    page_no = int(data[2])
-                except (ValueError, TypeError):
+
+                    page_no = int(
+                        data[2]
+                    )
+
+                except (
+                    ValueError,
+                    TypeError
+                ):
+
                     page_no = 1
 
-            # Original search message
+
+            # =============================================
+            # GET ORIGINAL QUERY
+            # =============================================
+
             reply_message = (
                 message.message.reply_to_message
             )
 
-            if reply_message and reply_message.text:
 
-                query = reply_message.text.strip()
+            if (
+                reply_message
+                and reply_message.text
+            ):
 
-                # If original query was:
-                # /am Alan Walker
-                # remove /am
-                if query.startswith("/am"):
+                query = (
+                    reply_message.text or ""
+                ).strip()
+
+
+                # /am query
+                if query.lower().startswith(
+                    "/am"
+                ):
 
                     parts = query.split(
                         maxsplit=1
                     )
 
                     if len(parts) == 2:
-                        query = parts[1].strip()
+
+                        query = (
+                            parts[1] or ""
+                        ).strip()
+
+                    else:
+
+                        query = ""
 
             else:
 
@@ -178,7 +251,7 @@ async def search(
 
 
         # =================================================
-        # EMPTY QUERY CHECK
+        # QUERY CHECK
         # =================================================
 
         if not query:
@@ -189,38 +262,36 @@ async def search(
 
 
         # =================================================
-        # SEARCH JIOSAAVN
+        # JIOSAAVN SEARCH
         # =================================================
 
         try:
+
+            api = Jiosaavn()
+
 
             if search_type in (
                 "all",
                 "topquery"
             ):
 
-                response = (
-                    await Jiosaavn()
-                    .search_all_types(
-                        query=query
-                    )
+                response = await api.search_all_types(
+                    query=query
                 )
 
             else:
 
-                response = (
-                    await Jiosaavn()
-                    .search(
-                        query=query,
-                        search_type=search_type,
-                        page_no=page_no
-                    )
+                response = await api.search(
+                    query=query,
+                    search_type=search_type,
+                    page_no=page_no
                 )
+
 
         except RuntimeError as e:
 
             logger.error(
-                "JioSaavn API error: %s",
+                "JioSaavn API RuntimeError: %s",
                 e
             )
 
@@ -232,11 +303,14 @@ async def search(
                 "Please try again."
             )
 
+
         except Exception as e:
 
             logger.exception(
-                "Unexpected JioSaavn search error"
+                "JioSaavn search request failed"
             )
+
+            traceback.print_exc()
 
             return await send_msg.edit(
                 "❌ Search failed.\n\n"
@@ -245,7 +319,7 @@ async def search(
 
 
         # =================================================
-        # NO RESPONSE
+        # RESPONSE VALIDATION
         # =================================================
 
         if not response:
@@ -256,11 +330,24 @@ async def search(
             )
 
 
+        if not isinstance(response, dict):
+
+            logger.error(
+                "Unexpected API response: %r",
+                response
+            )
+
+            return await send_msg.edit(
+                "❌ Invalid response received "
+                "from JioSaavn."
+            )
+
+
         buttons = []
 
 
         # =================================================
-        # ALL / TOP QUERY
+        # ALL / TOPQUERY
         # =================================================
 
         if search_type in (
@@ -303,55 +390,86 @@ async def search(
 
             if search_type == "topquery":
 
-                topquery_data = (
-                    response
-                    .get(
-                        "topquery",
-                        {}
-                    )
-                    .get(
-                        "data",
-                        []
-                    )
+                topquery = safe_dict(
+                    response.get("topquery")
                 )
 
-                sub_sorted_data = sorted(
-                    topquery_data,
-                    key=lambda x: x.get(
-                        "position",
-                        0
-                    )
+                topquery_data = safe_list(
+                    topquery.get("data")
                 )
+
+
+                # Remove invalid entries
+                valid_topquery = [
+
+                    item
+
+                    for item in topquery_data
+
+                    if isinstance(
+                        item,
+                        dict
+                    )
+                ]
+
+
+                try:
+
+                    sub_sorted_data = sorted(
+
+                        valid_topquery,
+
+                        key=lambda x: (
+                            x.get("position")
+                            or 0
+                        )
+                    )
+
+                except Exception:
+
+                    sub_sorted_data = (
+                        valid_topquery
+                    )
 
 
                 for item in sub_sorted_data:
 
-                    title = html.unescape(
-                        item.get(
-                            "title",
-                            "Unknown"
-                        )
+                    title = safe_text(
+                        item.get("title")
                     )
 
-                    album = item.get(
-                        "album"
+
+                    album = safe_text(
+                        item.get("album"),
+                        ""
                     )
 
-                    item_type = item.get(
-                        "type"
+
+                    item_type = safe_text(
+                        item.get("type"),
+                        ""
+                    ).lower()
+
+
+                    item_url = safe_text(
+                        item.get("url"),
+                        ""
                     )
 
-                    item_url = item.get(
-                        "url",
-                        "/"
+
+                    if not item_url:
+                        continue
+
+
+                    item_id = (
+                        item_url
+                        .rstrip("/")
+                        .rsplit("/", 1)[-1]
                     )
 
-                    item_id = item_url.rstrip(
-                        "/"
-                    ).rsplit(
-                        "/",
-                        1
-                    )[-1]
+
+                    if not item_id:
+                        continue
 
 
                     type_emoji_map = {
@@ -370,6 +488,7 @@ async def search(
                         item_type
                         not in type_emoji_map
                     ):
+
                         continue
 
 
@@ -419,19 +538,47 @@ async def search(
 
             else:
 
-                sorted_data = sorted(
-                    response.items(),
-                    key=lambda value:
-                    value[1].get(
-                        "position",
-                        0
-                    )
-                    if isinstance(
-                        value[1],
+                valid_items = []
+
+
+                for (
+                    result_type,
+                    result
+                ) in response.items():
+
+                    if not isinstance(
+                        result,
                         dict
+                    ):
+                        continue
+
+                    valid_items.append(
+                        (
+                            result_type,
+                            result
+                        )
                     )
-                    else 0
-                )
+
+
+                try:
+
+                    sorted_data = sorted(
+
+                        valid_items,
+
+                        key=lambda value: (
+                            value[1].get(
+                                "position"
+                            )
+                            or 0
+                        )
+                    )
+
+                except Exception:
+
+                    sorted_data = (
+                        valid_items
+                    )
 
 
                 for (
@@ -445,38 +592,39 @@ async def search(
                         not in
                         button_song_type_map
                     ):
+
                         continue
 
 
-                    if not isinstance(
-                        result,
-                        dict
-                    ):
+                    data = safe_list(
+                        result.get("data")
+                    )
+
+
+                    if not data:
                         continue
 
 
-                    if result.get("data"):
-
-                        (
-                            button_label,
-                            callback_data
-                        ) = (
-                            button_song_type_map[
-                                result_type
-                            ]
-                        )
+                    (
+                        button_label,
+                        callback_data
+                    ) = (
+                        button_song_type_map[
+                            result_type
+                        ]
+                    )
 
 
-                        buttons.append(
-                            [
-                                InlineKeyboardButton(
-                                    text=button_label,
-                                    callback_data=(
-                                        callback_data
-                                    )
+                    buttons.append(
+                        [
+                            InlineKeyboardButton(
+                                text=button_label,
+                                callback_data=(
+                                    callback_data
                                 )
-                            ]
-                        )
+                            )
+                        ]
+                    )
 
 
             text = (
@@ -488,26 +636,57 @@ async def search(
 
 
         # =================================================
-        # SONG / ALBUM / PLAYLIST / ARTIST RESULTS
+        # SONG / ALBUM / PLAYLIST / ARTIST
         # =================================================
 
         else:
 
-            total_results = response.get(
-                "total",
-                0
+            total_results = (
+                response.get("total") or 0
             )
 
 
-            for result in response.get(
-                "results",
-                []
+            try:
+
+                total_results = int(
+                    total_results
+                )
+
+            except (
+                ValueError,
+                TypeError
             ):
 
-                perma_url = result.get(
-                    "perma_url",
-                    "/"
+                total_results = 0
+
+
+            results = safe_list(
+                response.get("results")
+            )
+
+
+            for result in results:
+
+                if not isinstance(
+                    result,
+                    dict
+                ):
+
+                    continue
+
+
+                # =========================================
+                # ITEM URL / ID
+                # =========================================
+
+                perma_url = safe_text(
+                    result.get("perma_url"),
+                    ""
                 )
+
+
+                if not perma_url:
+                    continue
 
 
                 item_id = (
@@ -517,39 +696,57 @@ async def search(
                 )
 
 
-                title = html.unescape(
-                    result.get(
-                        "title",
-                        "Unknown"
-                    )
+                if not item_id:
+                    continue
+
+
+                # =========================================
+                # TITLE
+                # =========================================
+
+                title = safe_text(
+                    result.get("title")
                 )
 
 
-                result_type = result.get(
-                    "type",
-                    "unknown"
+                # =========================================
+                # RESULT TYPE
+                # =========================================
+
+                result_type = safe_text(
+                    result.get("type"),
+                    ""
+                ).lower()
+
+
+                # =========================================
+                # ARTIST
+                # =========================================
+
+                artist = safe_text(
+                    result.get("name"),
+                    "Unknown"
                 )
 
 
-                artist = html.unescape(
-                    result.get(
-                        "name",
-                        "Unknown"
-                    )
+                # =========================================
+                # MORE INFO
+                # =========================================
+
+                more_info = safe_dict(
+                    result.get("more_info")
                 )
 
 
-                more_info = result.get(
-                    "more_info",
-                    {}
-                ) or {}
-
-
-                album = more_info.get(
-                    "album",
+                album = safe_text(
+                    more_info.get("album"),
                     ""
                 )
 
+
+                # =========================================
+                # BUTTON LABEL
+                # =========================================
 
                 button_label_map = {
 
@@ -581,23 +778,25 @@ async def search(
                 )
 
 
-                if button_label:
+                if not button_label:
+                    continue
 
-                    buttons.append(
-                        [
-                            InlineKeyboardButton(
-                                text=button_label,
-                                callback_data=(
-                                    f"{result_type}"
-                                    f"#{item_id}"
-                                )
+
+                buttons.append(
+                    [
+                        InlineKeyboardButton(
+                            text=button_label,
+                            callback_data=(
+                                f"{result_type}"
+                                f"#{item_id}"
                             )
-                        ]
-                    )
+                        )
+                    ]
+                )
 
 
             # =============================================
-            # PAGE NAVIGATION
+            # RESULT TEXT
             # =============================================
 
             text = (
@@ -610,14 +809,21 @@ async def search(
             )
 
 
+            # =============================================
+            # PAGINATION
+            # =============================================
+
             navigation_buttons = []
 
 
             if page_no > 1:
 
                 navigation_buttons.append(
+
                     InlineKeyboardButton(
+
                         "⬅️",
+
                         callback_data=(
                             f"search#"
                             f"{search_type}#"
@@ -627,13 +833,17 @@ async def search(
                 )
 
 
-            if total_results > (
-                10 * page_no
+            if (
+                total_results
+                > (10 * page_no)
             ):
 
                 navigation_buttons.append(
+
                     InlineKeyboardButton(
+
                         "➡️",
+
                         callback_data=(
                             f"search#"
                             f"{search_type}#"
@@ -651,7 +861,7 @@ async def search(
 
 
         # =================================================
-        # NO BUTTONS
+        # NO RESULTS
         # =================================================
 
         if not buttons:
@@ -663,7 +873,7 @@ async def search(
 
 
         # =================================================
-        # CLOSE BUTTON
+        # CLOSE
         # =================================================
 
         buttons.append(
@@ -677,11 +887,13 @@ async def search(
 
 
         # =================================================
-        # SEND RESULTS
+        # SHOW RESULTS
         # =================================================
 
         await send_msg.edit(
+
             text,
+
             reply_markup=InlineKeyboardMarkup(
                 buttons
             )
@@ -700,9 +912,10 @@ async def search(
 
         traceback.print_exc()
 
+
         try:
 
-            if "send_msg" in locals():
+            if send_msg:
 
                 await send_msg.edit(
                     "❌ Something went wrong.\n\n"
@@ -710,4 +923,7 @@ async def search(
                 )
 
         except Exception:
-            pass
+
+            logger.exception(
+                "Failed to display search error"
+            )
