@@ -1,37 +1,67 @@
-##### MODIFY MESSAGE ACCORDING TO U ###
+##### AARTI MUSIC BOT TEXT #####
 
 class TEXT:
- 
-    ###### COMMANDS RELATED 
- 
-    START_MSG ="""
-**Hello {mention},**
-<blockquote>ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴛʜᴇ ᴊɪᴏsᴀᴀᴠɴ ᴛᴇʟᴇɢʀᴀᴍ ʙᴏᴛ! ᴛʜɪs ᴘᴏᴡᴇʀғᴜʟ ʙᴏᴛ ᴀʟʟᴏᴡs ʏᴏᴜ ᴛᴏ sᴇᴀʀᴄʜ ᴀɴᴅ ᴅᴏᴡɴʟᴏᴀᴅ sᴏɴɢs, ᴘʟᴀʏʟɪsᴛs, ᴀʟʙᴜᴍs, ᴀɴᴅ ᴀʀᴛɪsᴛs ᴅɪʀᴇᴄᴛʟʏ ғʀᴏᴍ ᴊɪᴏsᴀᴀᴠɴ.</blockquote>\n\n
-**🔰 Here is the Features :**\n
-- 𝘚𝘦𝘢𝘳𝘤𝘩 𝘧𝘰𝘳 𝘴𝘰𝘯𝘨𝘴, 𝘢𝘭𝘣𝘶𝘮𝘴, 𝘱𝘭𝘢𝘺𝘭𝘪𝘴𝘵𝘴, 𝘢𝘯𝘥 𝘢𝘳𝘵𝘪𝘴𝘵𝘴
-- 𝘋𝘰𝘸𝘯𝘭𝘰𝘢𝘥 𝘺𝘰𝘶𝘳 𝘧𝘢𝘷𝘰𝘳𝘪𝘵𝘦 𝘵𝘳𝘢𝘤𝘬𝘴 𝘥𝘪𝘳𝘦𝘤𝘵𝘭𝘺 𝘵𝘰 𝘛𝘦𝘭𝘦𝘨𝘳𝘢𝘮
-- 𝘌𝘹𝘱𝘭𝘰𝘳𝘦 𝘷𝘢𝘳𝘪𝘰𝘶𝘴 𝘧𝘦𝘢𝘵𝘶𝘳𝘦𝘴 𝘵𝘢𝘪𝘭𝘰𝘳𝘦𝘥 𝘵𝘰 𝘦𝘯𝘩𝘢𝘯𝘤𝘦 𝘺𝘰𝘶𝘳 𝘮𝘶𝘴𝘪𝘤 𝘦𝘹𝘱𝘦𝘳𝘪𝘦𝘯𝘤𝘦\n
-**Maintained By: [Anonymous](https://t.me/Ns_AnoNymous)**
+
+    # ==================== START ====================
+
+    START_MSG = """
+**Hello {mention},** ❤️
+
+<blockquote>🎵 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴀᴀʀᴛɪ ᴍᴜsɪᴄ!
+
+ʏᴏᴜʀ ᴘᴇʀsᴏɴᴀʟ ᴍᴜsɪᴄ ᴄᴏᴍᴘᴀɴɪᴏɴ 🎧
+sᴇᴀʀᴄʜ ᴀɴᴅ ᴅᴏᴡɴʟᴏᴀᴅ ʏᴏᴜʀ ғᴀᴠᴏʀɪᴛᴇ
+sᴏɴɢs, ᴀʟʙᴜᴍs, ᴘʟᴀʏʟɪsᴛs ᴀɴᴅ ᴀʀᴛɪsᴛs.</blockquote>
+
+**✨ Features :**
+
+• 🎧 𝘚𝘦𝘢𝘳𝘤𝘩 𝘺𝘰𝘶𝘳 𝘧𝘢𝘷𝘰𝘳𝘪𝘵𝘦 𝘴𝘰𝘯𝘨𝘴
+• 📥 𝘋𝘰𝘸𝘯𝘭𝘰𝘢𝘥 𝘮𝘶𝘴𝘪𝘤 𝘥𝘪𝘳𝘦𝘤𝘵𝘭𝘺
+• 💿 𝘌𝘹𝘱𝘭𝘰𝘳𝘦 𝘢𝘭𝘣𝘶𝘮𝘴 & 𝘱𝘭𝘢𝘺𝘭𝘪𝘴𝘵𝘴
+• 🎤 𝘋𝘪𝘴𝘤𝘰𝘷𝘦𝘳 𝘺𝘰𝘶𝘳 𝘧𝘢𝘷𝘰𝘳𝘪𝘵𝘦 𝘢𝘳𝘵𝘪𝘴𝘵𝘴
+
+**👑 Owner:** [UMCLON](https://t.me/umclon)
+**📢 Updates:** [UMCLON ERA](https://t.me/umclon_era)
 """
-    HELP_MSG ="""
-**It's very simple to use me! 😉**\n\n
+
+
+    # ==================== HELP ====================
+
+    HELP_MSG = """
+**🎧 How to use Aarti Music?**
+
 <blockquote>
-1. Start by configuring your preferences using the `/settings` command.\n
-2. Send me the name of a song, playlist, album, or artist you want to search for.\n
-3. I'll handle the rest and provide you with the results!\n\n
-**😊 Feel free to explore and enjoy the music!**
+1. Configure your preferences using `/settings`.
+
+2. Send me the name of any song, album, playlist or artist.
+
+3. Select your desired result.
+
+4. Aarti Music will handle the rest for you. 🎶
+
+❤️ Enjoy your music!
 </blockquote>
+
+**📢 Updates:** [UMCLON ERA](https://t.me/umclon_era)
 """
+
+
+    # ==================== ABOUT ====================
 
     ABOUT_MSG = """
 <blockquote>
-**🤖 Bot Name:** [🤖 {me.username}](https://t.me/{me.username})
-**📝 Language:** [Python 3](https://www.python.org/)
-**🧰 Framework:** [Pyrogram](https://github.com/pyrogram/pyrogram)
-**👨‍💻 Developer:** [Anonymous](https://t.me/The_proGrammerr)
-**👑 Maintained By:** [RangoZex](https://t.me/RangoZex)
-**📢 Updates Channel:** [NS Bots](https://t.me/NsBotsOfficial)
-**👥 Support Group:** [AMC Support](https://t.me/amcDevSupport)
-**🔗 Source Code:** [GitHub Repository](https://github.com/Ns-AnoNymouS/jiosaavn)
+**🤖 Bot Name:** [Aarti Music](https://t.me/{me.username})
+
+**📝 Language:** Python 3
+**🧰 Framework:** Pyrogram
+
+**👑 Owner:** [UMCLON](https://t.me/umclon)
+**👨‍💻 Developer:** [UMCLON](https://t.me/umclon)
+
+**📢 Updates Channel:** [UMCLON ERA](https://t.me/umclon_era)
+
+**🎵 Purpose:** Music Search & Download
 </blockquote>
+
+❤️ **Powered By UMCLON**
 """
