@@ -13,23 +13,16 @@ from pyrogram.types import (
     InlineKeyboardMarkup
 )
 
-
 logger = logging.getLogger(__name__)
 
 
 # =========================================================
-# SEARCH HANDLER
-#
-# PRIVATE:
-#   Direct song/search query
-#   Example: Tum Hi Ho
-#
-# GROUP:
-#   Only /am command
-#   Example: /am Tum Hi Ho
+# FILTERS
 # =========================================================
 
-
+# PRIVATE:
+# User directly song/album/artist ka naam bhej sakta hai.
+# Commands, links aur via_bot messages ignore honge.
 private_search_filter = (
     filters.text
     & filters.incoming
@@ -40,18 +33,27 @@ private_search_filter = (
         "start",
         "settings",
         "help",
-        "about",
-        "am"
+        "about"
     ])
 )
 
 
+# GROUP:
+# Group/Supergroup me ONLY:
+#
+# /am song name
+#
+# par search chalega.
 group_search_filter = (
     filters.command("am")
     & filters.incoming
-    & (filters.group | filters.supergroup)
+    & filters.group
 )
 
+
+# =========================================================
+# SEARCH HANDLER
+# =========================================================
 
 @Bot.on_callback_query(filters.regex(r"^search#"))
 @Bot.on_message(private_search_filter | group_search_filter)
@@ -60,448 +62,652 @@ async def search(
     message: Message | CallbackQuery
 ):
 
-    # ==========================================
-    # PREPARE QUERY
-    # ==========================================
-
-    if isinstance(message, Message):
-
-        # Group / Supergroup
-        if message.chat.type in ("group", "supergroup"):
-
-            # /am without song name
-            if len(message.command) < 2:
-                return await message.reply(
-                    "🎵 **Please enter a song name.**\n\n"
-                    "**Example:** `/am Tum Hi Ho`",
-                    quote=True
-                )
-
-            # Everything after /am becomes query
-            query = " ".join(message.command[1:]).strip()
-
-        # Private chat
-        else:
-            query = message.text.strip()
-
-        send_msg = await message.reply(
-            "__**Processing... ⏳**__",
-            quote=True
-        )
-
-    # Callback query
-    else:
-
-        await message.answer()
-
-        send_msg = message.message
-
-        # Original search query
-        if (
-            message.message
-            and message.message.reply_to_message
-            and message.message.reply_to_message.text
-        ):
-            original_text = (
-                message.message.reply_to_message.text.strip()
-            )
-
-            # If original message was /am query
-            if original_text.startswith("/am "):
-                query = original_text.split(
-                    maxsplit=1
-                )[1].strip()
-            else:
-                query = original_text
-
-        else:
-            return await message.answer(
-                "Search query not found.",
-                show_alert=True
-            )
-
-    # ==========================================
-    # USER SETTINGS
-    # ==========================================
-
-    page_no = 1
-
-    if isinstance(message, Message):
-
-        user_data = await client.db.get_user(
-            message.from_user.id
-        )
-
-        search_type = user_data["type"]
-
-    else:
-
-        data = message.data.split("#")
-
-        search_type = data[1]
-
-        if len(data) == 3:
-            page_no = int(data[2])
-
-    # ==========================================
-    # JIOSAAVN SEARCH
-    # ==========================================
-
     try:
 
-        if search_type in ("all", "topquery"):
+        # =================================================
+        # NORMAL MESSAGE
+        # =================================================
 
-            response = await Jiosaavn().search_all_types(
-                query=query
+        if isinstance(message, Message):
+
+            send_msg = await message.reply(
+                "__**Processing... ⏳**__",
+                quote=True
             )
+
+            # ---------------------------------------------
+            # PRIVATE CHAT
+            # ---------------------------------------------
+
+            if message.chat.type == "private":
+
+                query = message.text.strip()
+
+            # ---------------------------------------------
+            # GROUP / SUPERGROUP
+            # /am Alan Walker Spectre
+            # ---------------------------------------------
+
+            else:
+
+                if len(message.command) < 2:
+
+                    return await send_msg.edit(
+                        "❌ Please enter a song name.\n\n"
+                        "**Example:**\n"
+                        "`/am Alan Walker Spectre`"
+                    )
+
+                # Everything after /am becomes query
+                query = " ".join(
+                    message.command[1:]
+                ).strip()
+
+            # ---------------------------------------------
+            # GET USER SETTINGS
+            # ---------------------------------------------
+
+            user_data = await client.db.get_user(
+                message.from_user.id
+            )
+
+            if user_data:
+                search_type = user_data.get(
+                    "type",
+                    "all"
+                )
+            else:
+                search_type = "all"
+
+            page_no = 1
+
+        # =================================================
+        # CALLBACK QUERY
+        # =================================================
 
         else:
 
-            response = await Jiosaavn().search(
-                query=query,
-                search_type=search_type,
-                page_no=page_no
+            await message.answer()
+
+            send_msg = message.message
+
+            data = message.data.split("#")
+
+            search_type = (
+                data[1]
+                if len(data) > 1
+                else "all"
             )
 
-    except RuntimeError as e:
+            page_no = 1
 
-        logger.error(e)
-        traceback.print_exc()
+            if len(data) >= 3:
 
-        return await send_msg.edit(
-            "Connection refused by JioSaavn API. "
-            "Please try again."
-        )
+                try:
+                    page_no = int(data[2])
+                except (ValueError, TypeError):
+                    page_no = 1
 
-    # ==========================================
-    # NO RESULTS
-    # ==========================================
-
-    if not response:
-
-        return await send_msg.edit(
-            f"🔎 No search result found for "
-            f"your query `{query}`"
-        )
-
-    buttons = []
-
-    # ==========================================
-    # ALL / TOP QUERY
-    # ==========================================
-
-    if search_type in ("all", "topquery"):
-
-        button_song_type_map = {
-
-            "songs": (
-                "🎙 Songs",
-                "search#songs"
-            ),
-
-            "albums": (
-                "📚 Albums",
-                "search#albums"
-            ),
-
-            "playlists": (
-                "💾 Playlists",
-                "search#playlists"
-            ),
-
-            "artists": (
-                "👨‍🎤 Artists",
-                "search#artists"
-            ),
-
-            "topquery": (
-                "✨ Top Result",
-                "search#topquery"
-            ),
-        }
-
-        # ======================================
-        # TOP QUERY RESULTS
-        # ======================================
-
-        if search_type == "topquery":
-
-            sub_sorted_data = sorted(
-                response.get(
-                    "topquery",
-                    {}
-                ).get(
-                    "data",
-                    []
-                ),
-                key=lambda x: x.get(
-                    "position",
-                    0
-                )
+            # Original search message
+            reply_message = (
+                message.message.reply_to_message
             )
 
-            for data in sub_sorted_data:
+            if reply_message and reply_message.text:
 
-                title = data.get(
-                    "title",
-                    "unknown"
-                )
+                query = reply_message.text.strip()
 
-                title = html.unescape(title)
+                # If original query was:
+                # /am Alan Walker
+                # remove /am
+                if query.startswith("/am"):
 
-                album = data.get("album")
-
-                item_type = data.get("type")
-
-                item_id = data.get(
-                    "url",
-                    "/"
-                ).rsplit(
-                    "/",
-                    1
-                )[1]
-
-                type_emoji_map = {
-                    "song": "🎙",
-                    "album": "📚",
-                    "playlist": "💾",
-                    "artist": "👨‍🎤",
-                }
-
-                if item_type not in type_emoji_map:
-                    continue
-
-                emoji = type_emoji_map[
-                    item_type
-                ]
-
-                if album:
-
-                    button_text = (
-                        f"{emoji} {title} "
-                        f"from {album}"
+                    parts = query.split(
+                        maxsplit=1
                     )
 
-                else:
+                    if len(parts) == 2:
+                        query = parts[1].strip()
 
-                    button_text = (
-                        f"{emoji} {title}"
-                    )
+            else:
 
-                callback_data = (
-                    f"{item_type}#"
-                    f"{item_id}#topquery"
+                return await send_msg.edit(
+                    "❌ Could not find the original "
+                    "search query."
                 )
 
-                buttons.append([
-                    InlineKeyboardButton(
-                        text=button_text,
-                        callback_data=callback_data
-                    )
-                ])
 
-        # ======================================
-        # CATEGORY SELECTION
-        # ======================================
+        # =================================================
+        # EMPTY QUERY CHECK
+        # =================================================
 
-        else:
+        if not query:
 
-            sorted_data = sorted(
-                response.items(),
-                key=lambda value:
-                value[1].get(
-                    "position",
-                    0
-                )
+            return await send_msg.edit(
+                "❌ Please enter a song name."
             )
 
-            for result_type, result in sorted_data:
 
-                if (
-                    result_type
-                    not in button_song_type_map
-                ):
-                    continue
+        # =================================================
+        # SEARCH JIOSAAVN
+        # =================================================
 
-                if result.get("data"):
+        try:
 
-                    button_label, callback_data = (
-                        button_song_type_map[
-                            result_type
-                        ]
+            if search_type in (
+                "all",
+                "topquery"
+            ):
+
+                response = (
+                    await Jiosaavn()
+                    .search_all_types(
+                        query=query
                     )
+                )
 
-                    buttons.append([
-                        InlineKeyboardButton(
-                            text=button_label,
-                            callback_data=callback_data
-                        )
-                    ])
+            else:
 
-        text = (
-            f"**🔍 Search Query:** {query}\n\n"
-            "__Please select one category 👇__"
-        )
+                response = (
+                    await Jiosaavn()
+                    .search(
+                        query=query,
+                        search_type=search_type,
+                        page_no=page_no
+                    )
+                )
 
-    # ==========================================
-    # SONG / ALBUM / PLAYLIST / ARTIST RESULTS
-    # ==========================================
+        except RuntimeError as e:
 
-    else:
+            logger.error(
+                "JioSaavn API error: %s",
+                e
+            )
 
-        total_results = response.get(
-            "total",
-            0
-        )
+            traceback.print_exc()
 
-        for result in response.get(
-            "results",
-            []
+            return await send_msg.edit(
+                "❌ Connection refused by "
+                "JioSaavn API.\n\n"
+                "Please try again."
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Unexpected JioSaavn search error"
+            )
+
+            return await send_msg.edit(
+                "❌ Search failed.\n\n"
+                f"`{type(e).__name__}: {e}`"
+            )
+
+
+        # =================================================
+        # NO RESPONSE
+        # =================================================
+
+        if not response:
+
+            return await send_msg.edit(
+                "🔎 No search result found for "
+                f"your query `{query}`"
+            )
+
+
+        buttons = []
+
+
+        # =================================================
+        # ALL / TOP QUERY
+        # =================================================
+
+        if search_type in (
+            "all",
+            "topquery"
         ):
 
-            item_id = result.get(
-                "perma_url",
-                "/"
-            ).rsplit(
-                "/",
-                1
-            )[1]
+            button_song_type_map = {
 
-            title = result.get(
-                "title",
-                "unknown"
-            )
-
-            title = html.unescape(title)
-
-            result_type = result.get(
-                "type",
-                "unknown"
-            )
-
-            artist = result.get(
-                "name",
-                "unknown"
-            )
-
-            artist = html.unescape(artist)
-
-            more_info = result.get(
-                "more_info",
-                {}
-            )
-
-            album = more_info.get(
-                "album",
-                ""
-            )
-
-            button_label_map = {
-
-                "song": (
-                    f"🎙 {title} from '{album}'"
-                    if album
-                    else f"🎙 {title}"
+                "songs": (
+                    "🎙 Songs",
+                    "search#songs"
                 ),
 
-                "album": (
-                    f"📚 {title}"
+                "albums": (
+                    "📚 Albums",
+                    "search#albums"
                 ),
 
-                "playlist": (
-                    f"💾 {title}"
+                "playlists": (
+                    "💾 Playlists",
+                    "search#playlists"
                 ),
 
-                "artist": (
-                    f"👨‍🎤 {artist}"
+                "artists": (
+                    "👨‍🎤 Artists",
+                    "search#artists"
+                ),
+
+                "topquery": (
+                    "✨ Top Result",
+                    "search#topquery"
                 ),
             }
 
-            button_label = (
-                button_label_map.get(
-                    result_type
+
+            # =============================================
+            # TOP QUERY
+            # =============================================
+
+            if search_type == "topquery":
+
+                topquery_data = (
+                    response
+                    .get(
+                        "topquery",
+                        {}
+                    )
+                    .get(
+                        "data",
+                        []
+                    )
                 )
-            )
 
-            if button_label:
+                sub_sorted_data = sorted(
+                    topquery_data,
+                    key=lambda x: x.get(
+                        "position",
+                        0
+                    )
+                )
 
-                buttons.append([
-                    InlineKeyboardButton(
-                        text=button_label,
-                        callback_data=(
-                            f"{result_type}#"
-                            f"{item_id}"
+
+                for item in sub_sorted_data:
+
+                    title = html.unescape(
+                        item.get(
+                            "title",
+                            "Unknown"
                         )
                     )
-                ])
 
-        text = (
-            f"**📈 Total Results:** "
-            f"{total_results}\n\n"
-            f"**🔍 Search Query:** "
-            f"{query}\n\n"
-            f"**📜 Page No:** "
-            f"{page_no}"
-        )
+                    album = item.get(
+                        "album"
+                    )
 
-        # ======================================
-        # PAGINATION
-        # ======================================
+                    item_type = item.get(
+                        "type"
+                    )
 
-        navigation_buttons = []
+                    item_url = item.get(
+                        "url",
+                        "/"
+                    )
 
-        if page_no > 1:
+                    item_id = item_url.rstrip(
+                        "/"
+                    ).rsplit(
+                        "/",
+                        1
+                    )[-1]
 
-            navigation_buttons.append(
-                InlineKeyboardButton(
-                    "⬅️",
-                    callback_data=(
-                        f"search#"
-                        f"{search_type}#"
-                        f"{page_no - 1}"
+
+                    type_emoji_map = {
+
+                        "song": "🎙",
+
+                        "album": "📚",
+
+                        "playlist": "💾",
+
+                        "artist": "👨‍🎤"
+                    }
+
+
+                    if (
+                        item_type
+                        not in type_emoji_map
+                    ):
+                        continue
+
+
+                    emoji = (
+                        type_emoji_map[
+                            item_type
+                        ]
+                    )
+
+
+                    if album:
+
+                        button_text = (
+                            f"{emoji} {title} "
+                            f"from {album}"
+                        )
+
+                    else:
+
+                        button_text = (
+                            f"{emoji} {title}"
+                        )
+
+
+                    callback_data = (
+                        f"{item_type}#"
+                        f"{item_id}#"
+                        "topquery"
+                    )
+
+
+                    buttons.append(
+                        [
+                            InlineKeyboardButton(
+                                text=button_text,
+                                callback_data=(
+                                    callback_data
+                                )
+                            )
+                        ]
+                    )
+
+
+            # =============================================
+            # ALL SEARCH
+            # =============================================
+
+            else:
+
+                sorted_data = sorted(
+                    response.items(),
+                    key=lambda value:
+                    value[1].get(
+                        "position",
+                        0
+                    )
+                    if isinstance(
+                        value[1],
+                        dict
+                    )
+                    else 0
+                )
+
+
+                for (
+                    result_type,
+                    result
+                ) in sorted_data:
+
+
+                    if (
+                        result_type
+                        not in
+                        button_song_type_map
+                    ):
+                        continue
+
+
+                    if not isinstance(
+                        result,
+                        dict
+                    ):
+                        continue
+
+
+                    if result.get("data"):
+
+                        (
+                            button_label,
+                            callback_data
+                        ) = (
+                            button_song_type_map[
+                                result_type
+                            ]
+                        )
+
+
+                        buttons.append(
+                            [
+                                InlineKeyboardButton(
+                                    text=button_label,
+                                    callback_data=(
+                                        callback_data
+                                    )
+                                )
+                            ]
+                        )
+
+
+            text = (
+                f"**🔍 Search Query:** "
+                f"{query}\n\n"
+                "__Please select one "
+                "category 👇__"
+            )
+
+
+        # =================================================
+        # SONG / ALBUM / PLAYLIST / ARTIST RESULTS
+        # =================================================
+
+        else:
+
+            total_results = response.get(
+                "total",
+                0
+            )
+
+
+            for result in response.get(
+                "results",
+                []
+            ):
+
+                perma_url = result.get(
+                    "perma_url",
+                    "/"
+                )
+
+
+                item_id = (
+                    perma_url
+                    .rstrip("/")
+                    .rsplit("/", 1)[-1]
+                )
+
+
+                title = html.unescape(
+                    result.get(
+                        "title",
+                        "Unknown"
                     )
                 )
-            )
 
-        if total_results > 10 * page_no:
 
-            navigation_buttons.append(
-                InlineKeyboardButton(
-                    "➡️",
-                    callback_data=(
-                        f"search#"
-                        f"{search_type}#"
-                        f"{page_no + 1}"
+                result_type = result.get(
+                    "type",
+                    "unknown"
+                )
+
+
+                artist = html.unescape(
+                    result.get(
+                        "name",
+                        "Unknown"
                     )
                 )
+
+
+                more_info = result.get(
+                    "more_info",
+                    {}
+                ) or {}
+
+
+                album = more_info.get(
+                    "album",
+                    ""
+                )
+
+
+                button_label_map = {
+
+                    "song": (
+                        f"🎙 {title} "
+                        f"from '{album}'"
+                        if album
+                        else f"🎙 {title}"
+                    ),
+
+                    "album": (
+                        f"📚 {title}"
+                    ),
+
+                    "playlist": (
+                        f"💾 {title}"
+                    ),
+
+                    "artist": (
+                        f"👨‍🎤 {artist}"
+                    )
+                }
+
+
+                button_label = (
+                    button_label_map.get(
+                        result_type
+                    )
+                )
+
+
+                if button_label:
+
+                    buttons.append(
+                        [
+                            InlineKeyboardButton(
+                                text=button_label,
+                                callback_data=(
+                                    f"{result_type}"
+                                    f"#{item_id}"
+                                )
+                            )
+                        ]
+                    )
+
+
+            # =============================================
+            # PAGE NAVIGATION
+            # =============================================
+
+            text = (
+                f"**📈 Total Results:** "
+                f"{total_results}\n\n"
+                f"**🔍 Search Query:** "
+                f"{query}\n\n"
+                f"**📜 Page No:** "
+                f"{page_no}"
             )
 
-        if navigation_buttons:
-            buttons.append(
-                navigation_buttons
+
+            navigation_buttons = []
+
+
+            if page_no > 1:
+
+                navigation_buttons.append(
+                    InlineKeyboardButton(
+                        "⬅️",
+                        callback_data=(
+                            f"search#"
+                            f"{search_type}#"
+                            f"{page_no - 1}"
+                        )
+                    )
+                )
+
+
+            if total_results > (
+                10 * page_no
+            ):
+
+                navigation_buttons.append(
+                    InlineKeyboardButton(
+                        "➡️",
+                        callback_data=(
+                            f"search#"
+                            f"{search_type}#"
+                            f"{page_no + 1}"
+                        )
+                    )
+                )
+
+
+            if navigation_buttons:
+
+                buttons.append(
+                    navigation_buttons
+                )
+
+
+        # =================================================
+        # NO BUTTONS
+        # =================================================
+
+        if not buttons:
+
+            return await send_msg.edit(
+                "🔎 No search result found for "
+                f"your query `{query}`"
             )
 
-    # ==========================================
-    # FINAL RESPONSE
-    # ==========================================
 
-    if not buttons:
+        # =================================================
+        # CLOSE BUTTON
+        # =================================================
 
-        return await send_msg.edit(
-            f"🔎 No search result found for "
-            f"your query `{query}`"
+        buttons.append(
+            [
+                InlineKeyboardButton(
+                    "Close ❌",
+                    callback_data="close"
+                )
+            ]
         )
 
-    buttons.append([
-        InlineKeyboardButton(
-            "Close ❌",
-            callback_data="close"
-        )
-    ])
 
-    await send_msg.edit(
-        text,
-        reply_markup=InlineKeyboardMarkup(
-            buttons
+        # =================================================
+        # SEND RESULTS
+        # =================================================
+
+        await send_msg.edit(
+            text,
+            reply_markup=InlineKeyboardMarkup(
+                buttons
+            )
         )
-    )
+
+
+    # =====================================================
+    # FINAL ERROR HANDLER
+    # =====================================================
+
+    except Exception as e:
+
+        logger.exception(
+            "Error inside search handler"
+        )
+
+        traceback.print_exc()
+
+        try:
+
+            if "send_msg" in locals():
+
+                await send_msg.edit(
+                    "❌ Something went wrong.\n\n"
+                    f"`{type(e).__name__}: {e}`"
+                )
+
+        except Exception:
+            pass
