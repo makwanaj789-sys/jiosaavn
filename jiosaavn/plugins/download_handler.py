@@ -27,11 +27,10 @@ logger = logging.getLogger(__name__)
 
 
 # =========================================================
-# OWNER BUTTON
+# OWNER
 # =========================================================
 
-# Change this to your Telegram username
-OWNER_URL = "https://t.me/umclon"
+OWNER_URL = "https://t.me/YOUR_USERNAME"
 
 
 def get_owner_button():
@@ -39,7 +38,7 @@ def get_owner_button():
         [
             [
                 InlineKeyboardButton(
-                    "👑 Ajay Here ⚡",
+                    "👑 Ajay hu yarr ⚡",
                     url=OWNER_URL
                 )
             ]
@@ -71,17 +70,17 @@ async def download(
         _, item_id, search_type = message.data.split("#")
 
         msg = await message.message.edit(
-            "**⚡ Processing your request...**"
+            "🎧 **Preparing your music...**"
         )
 
     # =====================================================
-    # DIRECT JIOSAAVN LINK IN PRIVATE
+    # DIRECT JIOSAAVN LINK
     # =====================================================
 
     else:
 
         msg = await message.reply(
-            "**⚡ Processing your request...**",
+            "🎧 **Preparing your music...**",
             quote=True
         )
 
@@ -226,7 +225,7 @@ async def download_tool(
 ):
 
     # =====================================================
-    # DETERMINE DESTINATION CHAT
+    # DESTINATION CHAT
     # =====================================================
 
     if isinstance(message, CallbackQuery):
@@ -239,19 +238,11 @@ async def download_tool(
 
     user_id = message.from_user.id
 
-    # =====================================================
-    # REPLY MESSAGE
-    # =====================================================
-
     reply_message_id = msg.id
 
     # =====================================================
     # USER SETTINGS
     # =====================================================
-
-    is_exist = await client.db.is_song_id_exist(
-        song_id
-    )
 
     user = await client.db.get_user(
         user_id
@@ -275,56 +266,35 @@ async def download_tool(
     )
 
     # =====================================================
-    # CHECK CACHED SONG
+    # CHECK CACHE
     # =====================================================
+
+    is_exist = await client.db.is_song_id_exist(
+        song_id
+    )
+
+    cached_song = None
 
     if is_exist:
 
-        cached_data = await client.db.get_song(
-            song_id
-        )
+        try:
 
-        if cached_data:
-
-            song = cached_data.get(
-                quality
+            cached_data = await client.db.get_song(
+                song_id
             )
 
-        else:
+            if cached_data:
 
-            song = None
-
-        if song:
-
-            try:
-
-                song_msg = await client.get_messages(
-                    chat_id=int(
-                        song.get("chat_id")
-                    ),
-                    message_ids=int(
-                        song.get("message_id")
-                    )
+                cached_song = cached_data.get(
+                    quality
                 )
 
-                if not song_msg.empty:
+        except Exception as e:
 
-                    # Copy cached song with owner button
-                    is_sent = await song_msg.copy(
-                        chat_id=target_chat_id,
-                        reply_to_message_id=reply_message_id,
-                        reply_markup=get_owner_button()
-                    )
-
-                    if is_sent:
-                        return
-
-            except Exception as e:
-
-                logger.warning(
-                    "Cached song copy failed: %s",
-                    e
-                )
+            logger.warning(
+                "Cache lookup failed: %s",
+                e
+            )
 
     # =====================================================
     # GET SONG DATA
@@ -349,13 +319,11 @@ async def download_tool(
     # METADATA
     # =====================================================
 
-    title = song_data.get(
-        "title",
-        "Unknown"
-    )
-
     title = html.unescape(
-        title
+        song_data.get(
+            "title",
+            "Unknown"
+        )
     )
 
     formatted_title = title.replace(
@@ -373,13 +341,13 @@ async def download_tool(
         {}
     ) or {}
 
-    album = more_info.get(
-        "album",
-        "Unknown"
-    )
-
     album = html.unescape(
-        str(album)
+        str(
+            more_info.get(
+                "album",
+                "Unknown"
+            )
+        )
     )
 
     artist_map = more_info.get(
@@ -396,9 +364,7 @@ async def download_tool(
     # ARTIST HELPER
     # =====================================================
 
-    def get_artist_by_role(
-        role: str
-    ) -> str:
+    def get_artist_by_role(role: str) -> str:
 
         return ", ".join(
             artist.get("name")
@@ -428,9 +394,18 @@ async def download_tool(
         "release_date"
     )
 
+    release_year = song_data.get(
+        "year"
+    )
+
     copyright_text = more_info.get(
         "copyright_text",
         "Unknown"
+    )
+
+    album_url = more_info.get(
+        "album_url",
+        ""
     )
 
     try:
@@ -446,14 +421,9 @@ async def download_tool(
 
         duration = 0
 
-    release_year = song_data.get(
-        "year"
-    )
-
-    album_url = more_info.get(
-        "album_url",
-        ""
-    )
+    # =====================================================
+    # IMAGE
+    # =====================================================
 
     image_url = (
         song_data.get(
@@ -466,6 +436,10 @@ async def download_tool(
         )
     )
 
+    # =====================================================
+    # SONG URL
+    # =====================================================
+
     song_url = song_data.get(
         "perma_url",
         (
@@ -475,40 +449,28 @@ async def download_tool(
     )
 
     # =====================================================
-    # PREMIUM CAPTION
+    # UNIQUE AARTI MUSIC CAPTION
     # =====================================================
 
     text_data = []
 
-    # Invisible image preview
-    if image_url:
+    text_data.append(
+        "╭─ 🎧 **𝗔𝗔𝗥𝗧𝗜 𝗠𝗨𝗦𝗜𝗖** ─╮"
+    )
 
-        text_data.append(
-            f"[\u2063]({image_url})"
-            "🎵 **𝗡𝗢𝗪 𝗣𝗟𝗔𝗬𝗜𝗡𝗚**"
-        )
+    text_data.append("")
 
-    else:
+    text_data.append(
+        f"♪ **[{title}]({song_url})**"
+    )
 
-        text_data.append(
-            "🎵 **𝗡𝗢𝗪 𝗣𝗟𝗔𝗬𝗜𝗡𝗚**"
-        )
+    text_data.append(
+        "━━━━━━━━━━━━━━━━━━"
+    )
 
-    # Song
-    if title:
-
-        text_data.append(
-            f"🎧 **𝗧𝗶𝘁𝗹𝗲 :** "
-            f"[{title}]({song_url})"
-        )
-
-    # Artist
-    if singers:
-
-        text_data.append(
-            f"🎙 **𝗔𝗿𝘁𝗶𝘀𝘁 :** "
-            f"{singers}"
-        )
+    text_data.append(
+        f"🎙️ **{singers}**"
+    )
 
     # Album
     if album:
@@ -516,52 +478,46 @@ async def download_tool(
         if album_url:
 
             text_data.append(
-                f"💿 **𝗔𝗹𝗯𝘂𝗺 :** "
-                f"[{album}]({album_url})"
+                f"💿 **[{album}]({album_url})**"
             )
 
         else:
 
             text_data.append(
-                f"💿 **𝗔𝗹𝗯𝘂𝗺 :** "
-                f"{album}"
+                f"💿 **{album}**"
             )
 
-    # Language
-    if language:
+    # Language + release year/date
+    release_value = (
+        release_year
+        or release_date
+        or "Unknown"
+    )
 
-        text_data.append(
-            f"🌐 **𝗟𝗮𝗻𝗴𝘂𝗮𝗴𝗲 :** "
-            f"{language.title()}"
-        )
-
-    # Release date
-    if release_date:
-
-        text_data.append(
-            f"📅 **𝗥𝗲𝗹𝗲𝗮𝘀𝗲𝗱 :** "
-            f"`{release_date}`"
-        )
-
-    elif release_year:
-
-        text_data.append(
-            f"📅 **𝗥𝗲𝗹𝗲𝗮𝘀𝗲𝗱 :** "
-            f"`{release_year}`"
-        )
+    text_data.append(
+        f"🌐 **{str(language).title()}**"
+        f"  •  📅 **{release_value}**"
+    )
 
     # Quality
     text_data.append(
-        f"🎚 **𝗤𝘂𝗮𝗹𝗶𝘁𝘆 :** "
-        f"`{quality}`"
+        f"🎚️ **{quality}**"
     )
 
-    # Branding
+    text_data.append("")
+
     text_data.append(
-        "✨ **🎧 𝗩𝗶𝗯𝗲 𝘄𝗶𝘁𝗵 𝗔𝗮𝗿𝘁𝗶 🩵**"
+        "♫ **𝗙𝗲𝗲𝗹 𝗶𝘁. 𝗣𝗹𝗮𝘆 𝗶𝘁. "
+        "𝗟𝗼𝘃𝗲 𝗶𝘁.** 🩵"
     )
 
-    caption = "\n\n".join(
+    text_data.append("")
+
+    text_data.append(
+        "╰──────────────────╯"
+    )
+
+    caption = "\n".join(
         text_data
     )
 
@@ -607,12 +563,12 @@ async def download_tool(
     try:
 
         # =================================================
-        # DOWNLOADING STATUS
+        # STATUS
         # =================================================
 
         await msg.edit(
-            f"📥 **Downloading...**\n\n"
-            f"🎵 `{title}`"
+            f"📥 **Fetching Music...**\n\n"
+            f"♪ `{title}`"
         )
 
         await client.send_chat_action(
@@ -621,7 +577,7 @@ async def download_tool(
         )
 
         # =================================================
-        # DOWNLOAD THUMBNAIL
+        # DOWNLOAD JIOSAAVN 500x500 COVER
         # =================================================
 
         headers = {
@@ -644,31 +600,119 @@ async def download_tool(
 
         if image_url:
 
-            async with aiohttp.ClientSession() as session:
+            try:
 
-                async with session.get(
-                    image_url,
-                    headers=headers
-                ) as response:
+                async with aiohttp.ClientSession() as session:
 
-                    if response.status == 200:
+                    async with session.get(
+                        image_url,
+                        headers=headers
+                    ) as response:
 
-                        cover_art = (
-                            await response.read()
-                        )
+                        if response.status == 200:
 
-                        async with aiofiles.open(
-                            thumbnail_location,
-                            "wb"
-                        ) as file:
-
-                            await file.write(
-                                cover_art
+                            cover_art = (
+                                await response.read()
                             )
+
+                            async with aiofiles.open(
+                                thumbnail_location,
+                                "wb"
+                            ) as file:
+
+                                await file.write(
+                                    cover_art
+                                )
+
+            except Exception as e:
+
+                logger.warning(
+                    "Cover download failed: %s",
+                    e
+                )
+
+        # =================================================
+        # SEND COVER + DETAILS + OWNER BUTTON
+        # =================================================
+
+        details_message = None
+
+        if os.path.exists(
+            thumbnail_location
+        ):
+
+            try:
+
+                details_message = await client.send_photo(
+                    chat_id=target_chat_id,
+                    photo=thumbnail_location,
+                    caption=caption,
+                    reply_to_message_id=reply_message_id,
+                    reply_markup=get_owner_button()
+                )
+
+            except Exception as e:
+
+                logger.warning(
+                    "Cover message failed: %s",
+                    e
+                )
+
+        # =================================================
+        # FALLBACK IF COVER FAILED
+        # =================================================
+
+        if not details_message:
+
+            details_message = await client.send_message(
+                chat_id=target_chat_id,
+                text=caption,
+                reply_to_message_id=reply_message_id,
+                reply_markup=get_owner_button()
+            )
+
+        # =================================================
+        # TRY CACHED AUDIO FIRST
+        # =================================================
+
+        if cached_song:
+
+            try:
+
+                song_msg = await client.get_messages(
+                    chat_id=int(
+                        cached_song.get("chat_id")
+                    ),
+                    message_ids=int(
+                        cached_song.get("message_id")
+                    )
+                )
+
+                if not song_msg.empty:
+
+                    cached_sent = await song_msg.copy(
+                        chat_id=target_chat_id,
+                        reply_to_message_id=details_message.id
+                    )
+
+                    if cached_sent:
+                        return
+
+            except Exception as e:
+
+                logger.warning(
+                    "Cached song copy failed: %s",
+                    e
+                )
 
         # =================================================
         # DOWNLOAD AUDIO
         # =================================================
+
+        await msg.edit(
+            f"📥 **Downloading...**\n\n"
+            f"🎵 `{title}`"
+        )
 
         pre_audio = (
             await Jiosaavn()
@@ -680,7 +724,7 @@ async def download_tool(
         )
 
         # =================================================
-        # ADD METADATA
+        # ADD AUDIO METADATA
         # =================================================
 
         audio = MP4(
@@ -688,12 +732,13 @@ async def download_tool(
         )
 
         audio["\xa9nam"] = title
+
         audio["\xa9alb"] = album
+
         audio["\xa9ART"] = singers
 
         audio["\xa9cmt"] = (
-            f"Powered by Aarti Music - "
-            f"{song_url}"
+            f"Aarti Music - {song_url}"
         )
 
         audio["cprt"] = copyright_text
@@ -717,6 +762,10 @@ async def download_tool(
 
         audio.save()
 
+        # =================================================
+        # RENAME AUDIO
+        # =================================================
+
         os.rename(
             pre_audio,
             file_name
@@ -737,7 +786,7 @@ async def download_tool(
         )
 
         # =================================================
-        # SEND AUDIO + OWNER BUTTON
+        # SEND ACTUAL SONG
         # =================================================
 
         send_audio_kwargs = {
@@ -746,23 +795,17 @@ async def download_tool(
 
             "audio": file_name,
 
-            "caption": caption,
-
             "duration": duration,
 
             "title": title,
 
             "performer": singers,
 
-            "reply_to_message_id": reply_message_id,
-
-            "reply_markup": get_owner_button()
+            # Song appears directly under/replied to card
+            "reply_to_message_id": details_message.id
         }
 
-        # =================================================
-        # THUMBNAIL
-        # =================================================
-
+        # Use JioSaavn artwork in Telegram audio player too
         if os.path.exists(
             thumbnail_location
         ):
@@ -770,10 +813,6 @@ async def download_tool(
             send_audio_kwargs[
                 "thumb"
             ] = thumbnail_location
-
-        # =================================================
-        # SEND
-        # =================================================
 
         song_file = await client.send_audio(
             **send_audio_kwargs
@@ -790,7 +829,7 @@ async def download_tool(
             )
 
         # =================================================
-        # SAVE CACHE
+        # SAVE AUDIO CACHE
         # =================================================
 
         await client.db.update_song(
