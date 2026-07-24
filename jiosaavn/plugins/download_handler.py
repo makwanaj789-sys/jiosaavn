@@ -491,14 +491,14 @@ async def download_tool(
     else:
 
         text_data.append(
-            "🎵 **𝗡𝗢𝗪 𝗣𝗟𝗔𝗬𝗜𝗡𝗚**"
+            "🎵 **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**"
         )
 
     # Song
     if title:
 
         text_data.append(
-            f"🎧 **𝗧𝗶𝘁𝗹𝗲 :** "
+            f"🎧 **T̲i̲t̲l̲e̲ :** "
             f"[{title}]({song_url})"
         )
 
@@ -506,7 +506,7 @@ async def download_tool(
     if singers:
 
         text_data.append(
-            f"🎙 **𝗔𝗿𝘁𝗶𝘀𝘁 :** "
+            f"🎙 **A̲r̲t̲i̲s̲t̲  :** "
             f"{singers}"
         )
 
@@ -516,14 +516,14 @@ async def download_tool(
         if album_url:
 
             text_data.append(
-                f"💿 **𝗔𝗹𝗯𝘂𝗺 :** "
+                f"💿 **A̲l̲b̲u̲m̲  :** "
                 f"[{album}]({album_url})"
             )
 
         else:
 
             text_data.append(
-                f"💿 **𝗔𝗹𝗯𝘂𝗺 :** "
+                f"💿 **A̲l̲b̲u̲m̲  :** "
                 f"{album}"
             )
 
@@ -531,7 +531,7 @@ async def download_tool(
     if language:
 
         text_data.append(
-            f"🌐 **𝗟𝗮𝗻𝗴𝘂𝗮𝗴𝗲 :** "
+            f"🌐 **L̲a̲n̲g̲u̲a̲g̲e̲  :** "
             f"{language.title()}"
         )
 
@@ -539,26 +539,26 @@ async def download_tool(
     if release_date:
 
         text_data.append(
-            f"📅 **𝗥𝗲𝗹𝗲𝗮𝘀𝗲𝗱 :** "
+            f"📅 **R̲e̲l̲e̲a̲s̲e̲d̲  :** "
             f"`{release_date}`"
         )
 
     elif release_year:
 
         text_data.append(
-            f"📅 **𝗥𝗲𝗹𝗲𝗮𝘀𝗲𝗱 :** "
+            f"📅 **R̲e̲l̲e̲a̲s̲e̲d̲  :** "
             f"`{release_year}`"
         )
 
     # Quality
     text_data.append(
-        f"🎚 **𝗤𝘂𝗮𝗹𝗶𝘁𝘆 :** "
+        f"🎚 **Q̲u̲a̲l̲i̲t̲y̲  :** "
         f"`{quality}`"
     )
 
     # Branding
     text_data.append(
-        "✨ **𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 Aarti Music**"
+        "✨ **𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 ȺȺɍŧɨ Mᵾsɨȼ**"
     )
 
     caption = "\n\n".join(
