@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # =========================================================
 
 # Change this to your Telegram username
-OWNER_URL = "https://t.me/YOUR_USERNAME"
+OWNER_URL = "https://t.me/umclon"
 
 
 def get_owner_button():
@@ -39,7 +39,7 @@ def get_owner_button():
         [
             [
                 InlineKeyboardButton(
-                    "👑 Ajay hu yarr ⚡",
+                    "👑 —͟͞͞𝗔ᴊ፝֟፝֟ᴀʏ 〆 ⚡",
                     url=OWNER_URL
                 )
             ]
@@ -485,7 +485,7 @@ async def download_tool(
 
         text_data.append(
             f"[\u2063]({image_url})"
-            "🎵 **𝗡𝗢𝗪 𝗣𝗟𝗔𝗬𝗜𝗡𝗚**"
+            "🎵 **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**"
         )
 
     else:
@@ -558,7 +558,7 @@ async def download_tool(
 
     # Branding
     text_data.append(
-        "✨ **𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 ȺȺɍŧɨ Mᵾsɨȼ**"
+        "✨ **Powered by ȺȺɍŧɨ Mᵾsɨȼ**"
     )
 
     caption = "\n\n".join(
