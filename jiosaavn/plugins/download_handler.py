@@ -15,13 +15,36 @@ from mutagen.mp4 import MP4, MP4Cover
 
 from pyrogram.types import (
     Message,
-    CallbackQuery
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
 )
 
 from pyrogram.enums import ChatAction
 
 
 logger = logging.getLogger(__name__)
+
+
+# =========================================================
+# OWNER BUTTON
+# =========================================================
+
+# Change this to your Telegram username
+OWNER_URL = "https://t.me/umclon"
+
+
+def get_owner_button():
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "👑 Ajay Here ⚡",
+                    url=OWNER_URL
+                )
+            ]
+        ]
+    )
 
 
 # =========================================================
@@ -48,7 +71,7 @@ async def download(
         _, item_id, search_type = message.data.split("#")
 
         msg = await message.message.edit(
-            "**Processing...**"
+            "**⚡ Processing your request...**"
         )
 
     # =====================================================
@@ -58,7 +81,7 @@ async def download(
     else:
 
         msg = await message.reply(
-            "**Processing...**",
+            "**⚡ Processing your request...**",
             quote=True
         )
 
@@ -83,9 +106,8 @@ async def download(
 
         else:
             return await msg.edit(
-                "❌ Unsupported JioSaavn URL."
+                "❌ **Unsupported JioSaavn URL.**"
             )
-
 
     # =====================================================
     # SONG
@@ -99,7 +121,6 @@ async def download(
             msg,
             item_id
         )
-
 
     # =====================================================
     # ALBUM / PLAYLIST
@@ -124,7 +145,6 @@ async def download(
             else None
         )
 
-
         while True:
 
             response = (
@@ -136,16 +156,13 @@ async def download(
                 )
             )
 
-
             if (
                 not response
                 or not response.get("list")
             ):
                 break
 
-
             songs = response["list"]
-
 
             for song in songs:
 
@@ -157,12 +174,10 @@ async def download(
                 if not song_url:
                     continue
 
-
                 song_id = song_url.rsplit(
                     "/",
                     1
                 )[-1]
-
 
                 await download_tool(
                     client,
@@ -171,9 +186,7 @@ async def download(
                     song_id
                 )
 
-
             page_no += 1
-
 
     # =====================================================
     # UNSUPPORTED
@@ -182,14 +195,16 @@ async def download(
     else:
 
         await msg.edit(
-            "Artists and Podcast upload "
-            "not supported."
+            "❌ **Artists and Podcast upload "
+            "not supported.**"
         )
 
         return
 
+    # =====================================================
+    # DELETE PROCESSING MESSAGE
+    # =====================================================
 
-    # Delete processing message
     try:
 
         if msg.text and "Failed" not in msg.text:
@@ -211,11 +226,7 @@ async def download_tool(
 ):
 
     # =====================================================
-    # IMPORTANT:
-    # Determine destination chat
-    #
-    # Private -> private chat
-    # Group   -> same group
+    # DETERMINE DESTINATION CHAT
     # =====================================================
 
     if isinstance(message, CallbackQuery):
@@ -226,19 +237,13 @@ async def download_tool(
 
         target_chat_id = message.chat.id
 
-
     user_id = message.from_user.id
-
 
     # =====================================================
     # REPLY MESSAGE
     # =====================================================
 
-    # We reply to the processing/search message when possible.
-    # This avoids using a private user's message ID inside GC.
-
     reply_message_id = msg.id
-
 
     # =====================================================
     # USER SETTINGS
@@ -248,28 +253,26 @@ async def download_tool(
         song_id
     )
 
-
     user = await client.db.get_user(
         user_id
     )
 
-
-    # Default quality if DB data isn't available
     if user:
+
         quality = user.get(
             "quality",
             "320kbps"
         )
-    else:
-        quality = "320kbps"
 
+    else:
+
+        quality = "320kbps"
 
     bitrate = (
         320
         if quality == "320kbps"
         else 160
     )
-
 
     # =====================================================
     # CHECK CACHED SONG
@@ -281,7 +284,6 @@ async def download_tool(
             song_id
         )
 
-
         if cached_data:
 
             song = cached_data.get(
@@ -291,7 +293,6 @@ async def download_tool(
         else:
 
             song = None
-
 
         if song:
 
@@ -306,16 +307,14 @@ async def download_tool(
                     )
                 )
 
-
                 if not song_msg.empty:
 
-                    # IMPORTANT:
-                    # Copy to SAME chat where request came from
+                    # Copy cached song with owner button
                     is_sent = await song_msg.copy(
                         chat_id=target_chat_id,
-                        reply_to_message_id=reply_message_id
+                        reply_to_message_id=reply_message_id,
+                        reply_markup=get_owner_button()
                     )
-
 
                     if is_sent:
                         return
@@ -327,7 +326,6 @@ async def download_tool(
                     e
                 )
 
-
     # =====================================================
     # GET SONG DATA
     # =====================================================
@@ -336,19 +334,16 @@ async def download_tool(
         song_id=song_id
     )
 
-
     if (
         not song_response
         or not song_response.get("songs")
     ):
 
         return await msg.edit(
-            "❌ Song information could not be fetched."
+            "❌ **Song information could not be fetched.**"
         )
 
-
     song_data = song_response["songs"][0]
-
 
     # =====================================================
     # METADATA
@@ -363,42 +358,39 @@ async def download_tool(
         title
     )
 
-
     formatted_title = title.replace(
         " ",
         "-"
     )
-
 
     language = song_data.get(
         "language",
         "Unknown"
     )
 
-
     more_info = song_data.get(
         "more_info",
         {}
     ) or {}
-
 
     album = more_info.get(
         "album",
         "Unknown"
     )
 
+    album = html.unescape(
+        str(album)
+    )
 
     artist_map = more_info.get(
         "artistMap",
         {}
     ) or {}
 
-
     artists = artist_map.get(
         "artists",
         []
     ) or []
-
 
     # =====================================================
     # ARTIST HELPER
@@ -417,12 +409,10 @@ async def download_tool(
             )
         )
 
-
     music = (
         more_info.get("music")
         or get_artist_by_role("music")
     )
-
 
     singers = (
         get_artist_by_role("singer")
@@ -430,17 +420,18 @@ async def download_tool(
         or "Unknown"
     )
 
+    singers = html.unescape(
+        str(singers)
+    )
 
     release_date = more_info.get(
         "release_date"
     )
 
-
     copyright_text = more_info.get(
         "copyright_text",
         "Unknown"
     )
-
 
     try:
 
@@ -455,17 +446,14 @@ async def download_tool(
 
         duration = 0
 
-
     release_year = song_data.get(
         "year"
     )
-
 
     album_url = more_info.get(
         "album_url",
         ""
     )
-
 
     image_url = (
         song_data.get(
@@ -478,7 +466,6 @@ async def download_tool(
         )
     )
 
-
     song_url = song_data.get(
         "perma_url",
         (
@@ -487,74 +474,96 @@ async def download_tool(
         )
     )
 
-
     # =====================================================
-    # CAPTION
+    # PREMIUM CAPTION
     # =====================================================
 
     text_data = []
 
-
+    # Invisible image preview
     if image_url:
 
         text_data.append(
             f"[\u2063]({image_url})"
-            f"**🎧 Song:** "
-            f"[{title}]({song_url})"
+            "🎵 **𝗡𝗢𝗪 𝗣𝗟𝗔𝗬𝗜𝗡𝗚**"
         )
 
-    elif title:
+    else:
 
         text_data.append(
-            f"**🎧 Song:** "
+            "🎵 **𝗡𝗢𝗪 𝗣𝗟𝗔𝗬𝗜𝗡𝗚**"
+        )
+
+    # Song
+    if title:
+
+        text_data.append(
+            f"🎧 **𝗧𝗶𝘁𝗹𝗲 :** "
             f"[{title}]({song_url})"
         )
 
+    # Artist
+    if singers:
 
+        text_data.append(
+            f"🎙 **𝗔𝗿𝘁𝗶𝘀𝘁 :** "
+            f"{singers}"
+        )
+
+    # Album
     if album:
 
         if album_url:
 
             text_data.append(
-                f"**📚 Album:** "
+                f"💿 **𝗔𝗹𝗯𝘂𝗺 :** "
                 f"[{album}]({album_url})"
             )
 
         else:
 
             text_data.append(
-                f"**📚 Album:** {album}"
+                f"💿 **𝗔𝗹𝗯𝘂𝗺 :** "
+                f"{album}"
             )
 
-
+    # Language
     if language:
 
         text_data.append(
-            f"**📰 Language:** "
-            f"{language}"
+            f"🌐 **𝗟𝗮𝗻𝗴𝘂𝗮𝗴𝗲 :** "
+            f"{language.title()}"
         )
 
-
+    # Release date
     if release_date:
 
         text_data.append(
-            f"**📆 Release Date:** "
-            f"__{release_date}__"
+            f"📅 **𝗥𝗲𝗹𝗲𝗮𝘀𝗲𝗱 :** "
+            f"`{release_date}`"
         )
-
 
     elif release_year:
 
         text_data.append(
-            f"**📆 Release Year:** "
-            f"__{release_year}__"
+            f"📅 **𝗥𝗲𝗹𝗲𝗮𝘀𝗲𝗱 :** "
+            f"`{release_year}`"
         )
 
+    # Quality
+    text_data.append(
+        f"🎚 **𝗤𝘂𝗮𝗹𝗶𝘁𝘆 :** "
+        f"`{quality}`"
+    )
+
+    # Branding
+    text_data.append(
+        "✨ **🎧 𝗩𝗶𝗯𝗲 𝘄𝗶𝘁𝗵 𝗔𝗮𝗿𝘁𝗶 🩵**"
+    )
 
     caption = "\n\n".join(
         text_data
     )
-
 
     # =====================================================
     # DOWNLOAD DIRECTORY
@@ -565,38 +574,35 @@ async def download_tool(
         f"{time.time()}_{user_id}/"
     )
 
-
     os.makedirs(
         download_dir,
         exist_ok=True
     )
 
+    # =====================================================
+    # SAFE FILE NAME
+    # =====================================================
 
-    # Make filename safer
     safe_title = "".join(
         c
         for c in title
         if c not in '\\/:*?"<>|'
     )
 
-
     pre_file_name = (
         f"{download_dir}"
         f"{safe_title}_{quality}.mp4"
     )
-
 
     file_name = (
         f"{download_dir}"
         f"{safe_title}_{quality}.mp3"
     )
 
-
     thumbnail_location = (
         f"{download_dir}"
         f"{safe_title}.jpg"
     )
-
 
     try:
 
@@ -605,17 +611,14 @@ async def download_tool(
         # =================================================
 
         await msg.edit(
-            f"__📥 Downloading {title}__"
+            f"📥 **Downloading...**\n\n"
+            f"🎵 `{title}`"
         )
 
-
-        # IMPORTANT:
-        # Show action in originating chat
         await client.send_chat_action(
             chat_id=target_chat_id,
             action=ChatAction.RECORD_AUDIO
         )
-
 
         # =================================================
         # DOWNLOAD THUMBNAIL
@@ -637,9 +640,7 @@ async def download_tool(
             )
         }
 
-
         cover_art = None
-
 
         if image_url:
 
@@ -656,7 +657,6 @@ async def download_tool(
                             await response.read()
                         )
 
-
                         async with aiofiles.open(
                             thumbnail_location,
                             "wb"
@@ -665,7 +665,6 @@ async def download_tool(
                             await file.write(
                                 cover_art
                             )
-
 
         # =================================================
         # DOWNLOAD AUDIO
@@ -680,7 +679,6 @@ async def download_tool(
             )
         )
 
-
         # =================================================
         # ADD METADATA
         # =================================================
@@ -689,25 +687,22 @@ async def download_tool(
             pre_audio
         )
 
-
         audio["\xa9nam"] = title
         audio["\xa9alb"] = album
         audio["\xa9ART"] = singers
 
         audio["\xa9cmt"] = (
-            f"Powered by AartiMusic - "
+            f"Powered by Aarti Music - "
             f"{song_url}"
         )
 
         audio["cprt"] = copyright_text
-
 
         if release_year:
 
             audio["\xa9day"] = str(
                 release_year
             )
-
 
         if cover_art:
 
@@ -720,47 +715,54 @@ async def download_tool(
                 )
             ]
 
-
         audio.save()
-
 
         os.rename(
             pre_audio,
             file_name
         )
 
-
         # =================================================
         # UPLOAD STATUS
         # =================================================
 
         await msg.edit(
-            f"__📤 Uploading {title}__"
+            f"📤 **Uploading...**\n\n"
+            f"🎧 `{title}`"
         )
-
 
         await client.send_chat_action(
             chat_id=target_chat_id,
             action=ChatAction.UPLOAD_AUDIO
         )
 
-
         # =================================================
-        # SEND AUDIO
+        # SEND AUDIO + OWNER BUTTON
         # =================================================
 
         send_audio_kwargs = {
+
             "chat_id": target_chat_id,
+
             "audio": file_name,
+
             "caption": caption,
+
             "duration": duration,
+
             "title": title,
+
             "performer": singers,
-            "reply_to_message_id": reply_message_id
+
+            "reply_to_message_id": reply_message_id,
+
+            "reply_markup": get_owner_button()
         }
 
+        # =================================================
+        # THUMBNAIL
+        # =================================================
 
-        # Only use thumb if successfully downloaded
         if os.path.exists(
             thumbnail_location
         ):
@@ -769,11 +771,13 @@ async def download_tool(
                 "thumb"
             ] = thumbnail_location
 
+        # =================================================
+        # SEND
+        # =================================================
 
         song_file = await client.send_audio(
             **send_audio_kwargs
         )
-
 
         # =================================================
         # UPLOAD FAILED
@@ -782,9 +786,8 @@ async def download_tool(
         if not song_file:
 
             return await msg.edit(
-                "❌ Failed to upload song."
+                "❌ **Failed to upload song.**"
             )
-
 
         # =================================================
         # SAVE CACHE
@@ -797,7 +800,6 @@ async def download_tool(
             song_file.id
         )
 
-
     except Exception as e:
 
         logger.exception(
@@ -807,13 +809,12 @@ async def download_tool(
         try:
 
             await msg.edit(
-                "❌ Song download/upload failed.\n\n"
+                "❌ **Song download/upload failed.**\n\n"
                 f"`{type(e).__name__}: {e}`"
             )
 
         except Exception:
             pass
-
 
     finally:
 
