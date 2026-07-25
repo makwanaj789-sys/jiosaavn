@@ -3,6 +3,7 @@ import html
 import time
 import shutil
 import logging
+from datetime import datetime
 
 from jiosaavn.bot import Bot
 from api.jiosaavn import Jiosaavn
@@ -30,7 +31,6 @@ logger = logging.getLogger(__name__)
 # OWNER BUTTON
 # =========================================================
 
-# Change this to your Telegram username
 OWNER_URL = "https://t.me/umclon"
 
 
@@ -45,6 +45,33 @@ def get_owner_button():
             ]
         ]
     )
+
+
+# =========================================================
+# DATE FORMATTER
+# 2024-06-09 -> 09 Jun 2024
+# =========================================================
+
+def format_release_date(date_value, year_value=None):
+
+    if date_value:
+        try:
+            parsed = datetime.strptime(
+                str(date_value),
+                "%Y-%m-%d"
+            )
+
+            return parsed.strftime(
+                "%d %b %Y"
+            )
+
+        except (ValueError, TypeError):
+            return str(date_value)
+
+    if year_value:
+        return str(year_value)
+
+    return "Unknown"
 
 
 # =========================================================
@@ -75,7 +102,7 @@ async def download(
         )
 
     # =====================================================
-    # DIRECT JIOSAAVN LINK IN PRIVATE
+    # DIRECT JIOSAAVN LINK
     # =====================================================
 
     else:
@@ -226,22 +253,43 @@ async def download_tool(
 ):
 
     # =====================================================
-    # DETERMINE DESTINATION CHAT
+    # DESTINATION CHAT
     # =====================================================
 
     if isinstance(message, CallbackQuery):
-
         target_chat_id = message.message.chat.id
-
     else:
-
         target_chat_id = message.chat.id
 
-    user_id = message.from_user.id
+    # =====================================================
+    # REQUESTER
+    #
+    # CallbackQuery -> person who clicked final button
+    # Direct URL    -> person who sent URL
+    # =====================================================
 
-    # =====================================================
-    # REPLY MESSAGE
-    # =====================================================
+    requester = message.from_user
+
+    user_id = requester.id
+
+    requester_name = (
+        requester.first_name
+        or requester.username
+        or "Music Lover"
+    )
+
+    # Escape Telegram Markdown special characters in name
+    requester_name = (
+        str(requester_name)
+        .replace("\\", "\\\\")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+    )
+
+    # tg://user?id works even when user has no public username
+    requester_link = (
+        f"tg://user?id={user_id}"
+    )
 
     reply_message_id = msg.id
 
@@ -249,23 +297,16 @@ async def download_tool(
     # USER SETTINGS
     # =====================================================
 
-    is_exist = await client.db.is_song_id_exist(
-        song_id
-    )
-
     user = await client.db.get_user(
         user_id
     )
 
     if user:
-
         quality = user.get(
             "quality",
             "320kbps"
         )
-
     else:
-
         quality = "320kbps"
 
     bitrate = (
@@ -275,56 +316,37 @@ async def download_tool(
     )
 
     # =====================================================
-    # CHECK CACHED SONG
+    # CACHE INFO
+    #
+    # Don't return immediately here because we first need
+    # fresh metadata + requester caption.
     # =====================================================
+
+    is_exist = await client.db.is_song_id_exist(
+        song_id
+    )
+
+    cached_song = None
 
     if is_exist:
 
-        cached_data = await client.db.get_song(
-            song_id
-        )
+        try:
 
-        if cached_data:
-
-            song = cached_data.get(
-                quality
+            cached_data = await client.db.get_song(
+                song_id
             )
 
-        else:
-
-            song = None
-
-        if song:
-
-            try:
-
-                song_msg = await client.get_messages(
-                    chat_id=int(
-                        song.get("chat_id")
-                    ),
-                    message_ids=int(
-                        song.get("message_id")
-                    )
+            if cached_data:
+                cached_song = cached_data.get(
+                    quality
                 )
 
-                if not song_msg.empty:
+        except Exception as e:
 
-                    # Copy cached song with owner button
-                    is_sent = await song_msg.copy(
-                        chat_id=target_chat_id,
-                        reply_to_message_id=reply_message_id,
-                        reply_markup=get_owner_button()
-                    )
-
-                    if is_sent:
-                        return
-
-            except Exception as e:
-
-                logger.warning(
-                    "Cached song copy failed: %s",
-                    e
-                )
+            logger.warning(
+                "Cache lookup failed: %s",
+                e
+            )
 
     # =====================================================
     # GET SONG DATA
@@ -349,13 +371,13 @@ async def download_tool(
     # METADATA
     # =====================================================
 
-    title = song_data.get(
-        "title",
-        "Unknown"
-    )
-
     title = html.unescape(
-        title
+        str(
+            song_data.get(
+                "title",
+                "Unknown"
+            )
+        )
     )
 
     formatted_title = title.replace(
@@ -373,13 +395,13 @@ async def download_tool(
         {}
     ) or {}
 
-    album = more_info.get(
-        "album",
-        "Unknown"
-    )
-
     album = html.unescape(
-        str(album)
+        str(
+            more_info.get(
+                "album",
+                "Unknown"
+            )
+        )
     )
 
     artist_map = more_info.get(
@@ -428,6 +450,15 @@ async def download_tool(
         "release_date"
     )
 
+    release_year = song_data.get(
+        "year"
+    )
+
+    pretty_date = format_release_date(
+        release_date,
+        release_year
+    )
+
     copyright_text = more_info.get(
         "copyright_text",
         "Unknown"
@@ -443,12 +474,7 @@ async def download_tool(
         )
 
     except (ValueError, TypeError):
-
         duration = 0
-
-    release_year = song_data.get(
-        "year"
-    )
 
     album_url = more_info.get(
         "album_url",
@@ -475,93 +501,73 @@ async def download_tool(
     )
 
     # =====================================================
-    # PREMIUM CAPTION
+    # NEW UNIQUE CAPTION
     # =====================================================
 
     text_data = []
 
-    # Invisible image preview
-    if image_url:
-
-        text_data.append(
-            f"[\u2063]({image_url})"
-            "🎵 **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**"
-        )
-
-    else:
-
-        text_data.append(
-            "🎵 **ɴᴏᴡ ᴘʟᴀʏɪɴɢ**"
-        )
-
-    # Song
-    if title:
-
-        text_data.append(
-            f"🎧 **T̲i̲t̲l̲e̲ :** "
-            f"[{title}]({song_url})"
-        )
+    # Song + clickable JioSaavn URL
+    text_data.append(
+        f"🎧  **[{title}]({song_url})**"
+    )
 
     # Artist
-    if singers:
+    text_data.append(
+        f"     └─ {singers}"
+    )
 
-        text_data.append(
-            f"🎙 **A̲r̲t̲i̲s̲t̲  :** "
-            f"{singers}"
-        )
+    text_data.append("")
 
     # Album
     if album:
 
         if album_url:
-
             text_data.append(
-                f"💿 **A̲l̲b̲u̲m̲  :** "
-                f"[{album}]({album_url})"
+                f"💿  **[{album}]({album_url})**"
             )
-
         else:
-
             text_data.append(
-                f"💿 **A̲l̲b̲u̲m̲  :** "
-                f"{album}"
+                f"💿  **{album}**"
             )
 
-    # Language
-    if language:
-
-        text_data.append(
-            f"🌐 **L̲a̲n̲g̲u̲a̲g̲e̲  :** "
-            f"{language.title()}"
-        )
-
-    # Release date
-    if release_date:
-
-        text_data.append(
-            f"📅 **R̲e̲l̲e̲a̲s̲e̲d̲  :** "
-            f"`{release_date}`"
-        )
-
-    elif release_year:
-
-        text_data.append(
-            f"📅 **R̲e̲l̲e̲a̲s̲e̲d̲  :** "
-            f"`{release_year}`"
-        )
-
-    # Quality
+    # Language + quality
     text_data.append(
-        f"🎚 **Q̲u̲a̲l̲i̲t̲y̲  :** "
-        f"`{quality}`"
+        f"🌐  {str(language).title()}  ·  "
+        f"**{quality}**"
     )
 
-    # Branding
+    # Date
     text_data.append(
-        "✨ **Powered by ȺȺɍŧɨ Mᵾsɨȼ**"
+        f"📆  {pretty_date}"
     )
 
-    caption = "\n\n".join(
+    text_data.append("")
+    text_data.append(
+        "      ── ♪ ♫ ♪ ──"
+    )
+    text_data.append("")
+
+    # =====================================================
+    # CLICKABLE REQUESTER
+    # =====================================================
+
+    text_data.append(
+        "🪽  **𝗧𝗵𝗶𝘀 𝘁𝗿𝗮𝗰𝗸 𝘄𝗮𝘀 "
+        "𝗽𝗶𝗰𝗸𝗲𝗱 𝗯𝘆**"
+    )
+
+    text_data.append(
+        f"     ✦ [{requester_name}]"
+        f"({requester_link}) ✦"
+    )
+
+    text_data.append("")
+
+    text_data.append(
+        "♡  **listen • feel • repeat**"
+    )
+
+    caption = "\n".join(
         text_data
     )
 
@@ -607,6 +613,45 @@ async def download_tool(
     try:
 
         # =================================================
+        # IF SONG IS CACHED
+        #
+        # We copy the audio but replace old caption with
+        # fresh caption containing CURRENT requester.
+        # =================================================
+
+        if cached_song:
+
+            try:
+
+                song_msg = await client.get_messages(
+                    chat_id=int(
+                        cached_song.get("chat_id")
+                    ),
+                    message_ids=int(
+                        cached_song.get("message_id")
+                    )
+                )
+
+                if not song_msg.empty:
+
+                    is_sent = await song_msg.copy(
+                        chat_id=target_chat_id,
+                        reply_to_message_id=reply_message_id,
+                        caption=caption,
+                        reply_markup=get_owner_button()
+                    )
+
+                    if is_sent:
+                        return
+
+            except Exception as e:
+
+                logger.warning(
+                    "Cached song copy failed: %s",
+                    e
+                )
+
+        # =================================================
         # DOWNLOADING STATUS
         # =================================================
 
@@ -621,7 +666,7 @@ async def download_tool(
         )
 
         # =================================================
-        # DOWNLOAD THUMBNAIL
+        # DOWNLOAD JIOSAAVN THUMBNAIL
         # =================================================
 
         headers = {
@@ -692,8 +737,7 @@ async def download_tool(
         audio["\xa9ART"] = singers
 
         audio["\xa9cmt"] = (
-            f"Powered by Aarti Music - "
-            f"{song_url}"
+            f"Aarti Music - {song_url}"
         )
 
         audio["cprt"] = copyright_text
@@ -737,7 +781,7 @@ async def download_tool(
         )
 
         # =================================================
-        # SEND AUDIO + OWNER BUTTON
+        # SEND AUDIO
         # =================================================
 
         send_audio_kwargs = {
@@ -760,7 +804,7 @@ async def download_tool(
         }
 
         # =================================================
-        # THUMBNAIL
+        # JIOSAAVN THUMBNAIL
         # =================================================
 
         if os.path.exists(
