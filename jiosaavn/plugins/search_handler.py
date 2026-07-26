@@ -14,6 +14,10 @@ from pyrogram.types import (
     InlineKeyboardMarkup
 )
 
+# Post Creator state check
+from jiosaavn.plugins.admin import is_post_creator_active
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 def safe_text(value, default="Unknown"):
     """Safely convert API values to text."""
+
     if value is None:
         return default
 
@@ -95,18 +100,39 @@ async def search(
 
         if isinstance(message, Message):
 
+            # =============================================
+            # POST CREATOR PROTECTION
+            # =============================================
+            #
+            # Agar owner Post Creator use kar raha hai,
+            # uske text/button name ko song search mat karo.
+            # =============================================
+
+            if (
+                message.from_user
+                and is_post_creator_active(
+                    message.from_user.id
+                )
+            ):
+                return
+
             send_msg = await message.reply(
                 "__**Processing... ⏳**__",
                 quote=True
             )
 
-            raw_text = (message.text or "").strip()
+            raw_text = (
+                message.text or ""
+            ).strip()
 
             # =============================================
             # PRIVATE CHAT
             # =============================================
 
-            if message.chat.type == ChatType.PRIVATE:
+            if (
+                message.chat.type
+                == ChatType.PRIVATE
+            ):
 
                 query = raw_text
 
@@ -117,12 +143,17 @@ async def search(
             else:
 
                 # Supports:
+                #
                 # /am Manwa Lage
+                #
                 # /am@BotUsername Manwa Lage
 
-                parts = raw_text.split(maxsplit=1)
+                parts = raw_text.split(
+                    maxsplit=1
+                )
 
                 if len(parts) < 2:
+
                     return await send_msg.edit(
                         "❌ Please enter a song name.\n\n"
                         "**Example:**\n"
@@ -132,6 +163,7 @@ async def search(
                 query = parts[1].strip()
 
                 if not query:
+
                     return await send_msg.edit(
                         "❌ Please enter a song name.\n\n"
                         "**Example:**\n"
@@ -143,20 +175,30 @@ async def search(
             # =============================================
 
             try:
-                user_data = await client.db.get_user(
-                    message.from_user.id
+
+                user_data = (
+                    await client.db.get_user(
+                        message.from_user.id
+                    )
                 )
+
             except Exception:
+
                 logger.exception(
                     "Failed to get user settings"
                 )
+
                 user_data = {}
 
-            if not isinstance(user_data, dict):
+            if not isinstance(
+                user_data,
+                dict
+            ):
                 user_data = {}
 
             search_type = (
-                user_data.get("type") or "all"
+                user_data.get("type")
+                or "all"
             )
 
             page_no = 1
@@ -171,22 +213,34 @@ async def search(
 
             send_msg = message.message
 
-            callback_data = message.data or ""
+            callback_data = (
+                message.data or ""
+            )
 
             data = callback_data.split("#")
 
             search_type = (
                 data[1]
-                if len(data) > 1 and data[1]
+                if len(data) > 1
+                and data[1]
                 else "all"
             )
 
             page_no = 1
 
             if len(data) >= 3:
+
                 try:
-                    page_no = int(data[2])
-                except (ValueError, TypeError):
+
+                    page_no = int(
+                        data[2]
+                    )
+
+                except (
+                    ValueError,
+                    TypeError
+                ):
+
                     page_no = 1
 
             # =============================================
@@ -194,7 +248,9 @@ async def search(
             # =============================================
 
             reply_message = (
-                message.message.reply_to_message
+                message
+                .message
+                .reply_to_message
             )
 
             if (
@@ -203,29 +259,40 @@ async def search(
             ):
 
                 query = (
-                    reply_message.text or ""
+                    reply_message.text
+                    or ""
                 ).strip()
 
-                # If search came from group:
+                # Group search:
+                #
                 # /am Manwa Lage
-                # remove /am
+                #
+                # Remove /am
 
-                if query.lower().startswith("/am"):
+                if query.lower().startswith(
+                    "/am"
+                ):
 
                     parts = query.split(
                         maxsplit=1
                     )
 
                     if len(parts) >= 2:
-                        query = parts[1].strip()
+
+                        query = (
+                            parts[1]
+                            .strip()
+                        )
+
                     else:
+
                         query = ""
 
             else:
 
                 return await send_msg.edit(
-                    "❌ Could not find the original "
-                    "search query."
+                    "❌ Could not find the "
+                    "original search query."
                 )
 
         # =================================================
@@ -240,12 +307,17 @@ async def search(
 
         # =================================================
         # ADMIN ANALYTICS
+        # =================================================
         #
-        # IMPORTANT:
-        # Only NEW searches are counted.
+        # Only ORIGINAL searches count.
         #
-        # Category callbacks, pagination, etc.
-        # will NOT increase search count.
+        # Category click:
+        # Songs / Albums / Artists
+        #
+        # Pagination:
+        # Next / Previous
+        #
+        # These will NOT increase the search counter.
         # =================================================
 
         if isinstance(message, Message):
@@ -258,32 +330,37 @@ async def search(
                     else 0
                 )
 
-                chat_id = message.chat.id
+                chat_id = (
+                    message.chat.id
+                )
 
-                # -----------------------------------------
-                # TRACK USER + SEARCH
-                # -----------------------------------------
+                # =========================================
+                # USER + SEARCH TRACKING
+                # =========================================
 
                 if user_id:
 
-                    # Ensures user exists in MongoDB
+                    # Ensure user exists
                     await client.db.get_user(
                         user_id
                     )
 
-                    # Add one search to analytics
+                    # +1 search
                     await client.db.add_search(
                         user_id=user_id,
                         chat_id=chat_id
                     )
 
-                # -----------------------------------------
-                # TRACK GROUP
-                # -----------------------------------------
+                # =========================================
+                # GROUP TRACKING
+                # =========================================
 
-                if message.chat.type in (
-                    ChatType.GROUP,
-                    ChatType.SUPERGROUP
+                if (
+                    message.chat.type
+                    in (
+                        ChatType.GROUP,
+                        ChatType.SUPERGROUP
+                    )
                 ):
 
                     await client.db.add_group(
@@ -292,9 +369,12 @@ async def search(
 
             except Exception:
 
-                # Analytics must never stop music search
+                # Analytics error should NEVER
+                # break music searching.
+
                 logger.exception(
-                    "Failed to save search analytics"
+                    "Failed to save "
+                    "search analytics"
                 )
 
         # =================================================
@@ -310,22 +390,27 @@ async def search(
                 "topquery"
             ):
 
-                response = await api.search_all_types(
-                    query=query
+                response = (
+                    await api.search_all_types(
+                        query=query
+                    )
                 )
 
             else:
 
-                response = await api.search(
-                    query=query,
-                    search_type=search_type,
-                    page_no=page_no
+                response = (
+                    await api.search(
+                        query=query,
+                        search_type=search_type,
+                        page_no=page_no
+                    )
                 )
 
         except RuntimeError as e:
 
             logger.error(
-                "JioSaavn API RuntimeError: %s",
+                "JioSaavn API "
+                "RuntimeError: %s",
                 e
             )
 
@@ -357,11 +442,14 @@ async def search(
         if not response:
 
             return await send_msg.edit(
-                "🔎 No search result found for "
-                f"your query `{query}`"
+                "🔎 No search result found "
+                f"for your query `{query}`"
             )
 
-        if not isinstance(response, dict):
+        if not isinstance(
+            response,
+            dict
+        ):
 
             logger.error(
                 "Invalid API response: %r",
@@ -419,17 +507,24 @@ async def search(
             if search_type == "topquery":
 
                 topquery = safe_dict(
-                    response.get("topquery")
+                    response.get(
+                        "topquery"
+                    )
                 )
 
                 topquery_data = safe_list(
-                    topquery.get("data")
+                    topquery.get(
+                        "data"
+                    )
                 )
 
                 valid_topquery = [
                     item
                     for item in topquery_data
-                    if isinstance(item, dict)
+                    if isinstance(
+                        item,
+                        dict
+                    )
                 ]
 
                 try:
@@ -437,32 +532,45 @@ async def search(
                     sub_sorted_data = sorted(
                         valid_topquery,
                         key=lambda x: (
-                            x.get("position") or 0
+                            x.get(
+                                "position"
+                            )
+                            or 0
                         )
                     )
 
                 except Exception:
 
-                    sub_sorted_data = valid_topquery
+                    sub_sorted_data = (
+                        valid_topquery
+                    )
 
                 for item in sub_sorted_data:
 
                     title = safe_text(
-                        item.get("title")
+                        item.get(
+                            "title"
+                        )
                     )
 
                     album = safe_text(
-                        item.get("album"),
+                        item.get(
+                            "album"
+                        ),
                         ""
                     )
 
                     item_type = safe_text(
-                        item.get("type"),
+                        item.get(
+                            "type"
+                        ),
                         ""
                     ).lower()
 
                     item_url = safe_text(
-                        item.get("url"),
+                        item.get(
+                            "url"
+                        ),
                         ""
                     )
 
@@ -472,7 +580,10 @@ async def search(
                     item_id = (
                         item_url
                         .rstrip("/")
-                        .rsplit("/", 1)[-1]
+                        .rsplit(
+                            "/",
+                            1
+                        )[-1]
                     )
 
                     if not item_id:
@@ -485,24 +596,31 @@ async def search(
                         "artist": "👨‍🎤"
                     }
 
-                    if item_type not in type_emoji_map:
+                    if (
+                        item_type
+                        not in type_emoji_map
+                    ):
                         continue
 
-                    emoji = type_emoji_map[
-                        item_type
-                    ]
+                    emoji = (
+                        type_emoji_map[
+                            item_type
+                        ]
+                    )
 
                     if album:
 
                         button_text = (
-                            f"{emoji} {title} "
+                            f"{emoji} "
+                            f"{title} "
                             f"from {album}"
                         )
 
                     else:
 
                         button_text = (
-                            f"{emoji} {title}"
+                            f"{emoji} "
+                            f"{title}"
                         )
 
                     callback_data = (
@@ -515,7 +633,9 @@ async def search(
                         [
                             InlineKeyboardButton(
                                 text=button_text,
-                                callback_data=callback_data
+                                callback_data=(
+                                    callback_data
+                                )
                             )
                         ]
                     )
@@ -553,13 +673,16 @@ async def search(
                         key=lambda value: (
                             value[1].get(
                                 "position"
-                            ) or 0
+                            )
+                            or 0
                         )
                     )
 
                 except Exception:
 
-                    sorted_data = valid_items
+                    sorted_data = (
+                        valid_items
+                    )
 
                 for (
                     result_type,
@@ -568,12 +691,15 @@ async def search(
 
                     if (
                         result_type
-                        not in button_song_type_map
+                        not in
+                        button_song_type_map
                     ):
                         continue
 
                     data_list = safe_list(
-                        result.get("data")
+                        result.get(
+                            "data"
+                        )
                     )
 
                     if not data_list:
@@ -582,22 +708,28 @@ async def search(
                     (
                         button_label,
                         callback_data
-                    ) = button_song_type_map[
-                        result_type
-                    ]
+                    ) = (
+                        button_song_type_map[
+                            result_type
+                        ]
+                    )
 
                     buttons.append(
                         [
                             InlineKeyboardButton(
                                 text=button_label,
-                                callback_data=callback_data
+                                callback_data=(
+                                    callback_data
+                                )
                             )
                         ]
                     )
 
             text = (
-                f"**🔍 Search Query:** {query}\n\n"
-                "__Please select one category 👇__"
+                f"**🔍 Search Query:** "
+                f"{query}\n\n"
+                "__Please select one "
+                "category 👇__"
             )
 
         # =================================================
@@ -607,18 +739,29 @@ async def search(
         else:
 
             total_results = (
-                response.get("total") or 0
+                response.get(
+                    "total"
+                )
+                or 0
             )
 
             try:
+
                 total_results = int(
                     total_results
                 )
-            except (ValueError, TypeError):
+
+            except (
+                ValueError,
+                TypeError
+            ):
+
                 total_results = 0
 
             results = safe_list(
-                response.get("results")
+                response.get(
+                    "results"
+                )
             )
 
             for result in results:
@@ -634,7 +777,9 @@ async def search(
                 # =========================================
 
                 perma_url = safe_text(
-                    result.get("perma_url"),
+                    result.get(
+                        "perma_url"
+                    ),
                     ""
                 )
 
@@ -644,7 +789,10 @@ async def search(
                 item_id = (
                     perma_url
                     .rstrip("/")
-                    .rsplit("/", 1)[-1]
+                    .rsplit(
+                        "/",
+                        1
+                    )[-1]
                 )
 
                 if not item_id:
@@ -655,7 +803,9 @@ async def search(
                 # =========================================
 
                 title = safe_text(
-                    result.get("title")
+                    result.get(
+                        "title"
+                    )
                 )
 
                 # =========================================
@@ -663,7 +813,9 @@ async def search(
                 # =========================================
 
                 result_type = safe_text(
-                    result.get("type"),
+                    result.get(
+                        "type"
+                    ),
                     ""
                 ).lower()
 
@@ -672,7 +824,9 @@ async def search(
                 # =========================================
 
                 artist = safe_text(
-                    result.get("name"),
+                    result.get(
+                        "name"
+                    ),
                     "Unknown"
                 )
 
@@ -681,11 +835,15 @@ async def search(
                 # =========================================
 
                 more_info = safe_dict(
-                    result.get("more_info")
+                    result.get(
+                        "more_info"
+                    )
                 )
 
                 album = safe_text(
-                    more_info.get("album"),
+                    more_info.get(
+                        "album"
+                    ),
                     ""
                 )
 
@@ -729,7 +887,8 @@ async def search(
                         InlineKeyboardButton(
                             text=button_label,
                             callback_data=(
-                                f"{result_type}#{item_id}"
+                                f"{result_type}#"
+                                f"{item_id}"
                             )
                         )
                     ]
@@ -737,20 +896,22 @@ async def search(
 
             # =============================================
             # RESULT TEXT
-            # =========================================
+            # =============================================
 
             text = (
                 f"**📈 Total Results:** "
                 f"{total_results}\n\n"
+
                 f"**🔍 Search Query:** "
                 f"{query}\n\n"
+
                 f"**📜 Page No:** "
                 f"{page_no}"
             )
 
             # =============================================
             # PAGINATION
-            # =========================================
+            # =============================================
 
             navigation_buttons = []
 
@@ -795,8 +956,8 @@ async def search(
         if not buttons:
 
             return await send_msg.edit(
-                "🔎 No search result found for "
-                f"your query `{query}`"
+                "🔎 No search result found "
+                f"for your query `{query}`"
             )
 
         # =================================================
@@ -818,8 +979,10 @@ async def search(
 
         await send_msg.edit(
             text,
-            reply_markup=InlineKeyboardMarkup(
-                buttons
+            reply_markup=(
+                InlineKeyboardMarkup(
+                    buttons
+                )
             )
         )
 
@@ -847,5 +1010,6 @@ async def search(
         except Exception:
 
             logger.exception(
-                "Failed to display search error"
+                "Failed to display "
+                "search error"
             )
