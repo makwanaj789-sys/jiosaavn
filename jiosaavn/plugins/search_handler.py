@@ -75,7 +75,6 @@ private_search_filter = (
 group_search_filter = (
     filters.command("am")
     & filters.incoming
-    & filters.group
 )
 
 
