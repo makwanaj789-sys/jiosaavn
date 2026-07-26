@@ -58,7 +58,9 @@ private_search_filter = (
         "start",
         "settings",
         "help",
-        "about"
+        "about",
+        "admin",
+        "cancel"
     ])
 )
 
@@ -161,7 +163,7 @@ async def search(
 
         # =================================================
         # CALLBACK QUERY
-        # =========================================================
+        # =================================================
 
         else:
 
@@ -228,7 +230,7 @@ async def search(
 
         # =================================================
         # EMPTY QUERY CHECK
-        # =========================================================
+        # =================================================
 
         if not query:
 
@@ -237,8 +239,67 @@ async def search(
             )
 
         # =================================================
+        # ADMIN ANALYTICS
+        #
+        # IMPORTANT:
+        # Only NEW searches are counted.
+        #
+        # Category callbacks, pagination, etc.
+        # will NOT increase search count.
+        # =================================================
+
+        if isinstance(message, Message):
+
+            try:
+
+                user_id = (
+                    message.from_user.id
+                    if message.from_user
+                    else 0
+                )
+
+                chat_id = message.chat.id
+
+                # -----------------------------------------
+                # TRACK USER + SEARCH
+                # -----------------------------------------
+
+                if user_id:
+
+                    # Ensures user exists in MongoDB
+                    await client.db.get_user(
+                        user_id
+                    )
+
+                    # Add one search to analytics
+                    await client.db.add_search(
+                        user_id=user_id,
+                        chat_id=chat_id
+                    )
+
+                # -----------------------------------------
+                # TRACK GROUP
+                # -----------------------------------------
+
+                if message.chat.type in (
+                    ChatType.GROUP,
+                    ChatType.SUPERGROUP
+                ):
+
+                    await client.db.add_group(
+                        chat_id
+                    )
+
+            except Exception:
+
+                # Analytics must never stop music search
+                logger.exception(
+                    "Failed to save search analytics"
+                )
+
+        # =================================================
         # SEARCH JIOSAAVN
-        # =========================================================
+        # =================================================
 
         try:
 
@@ -291,7 +352,7 @@ async def search(
 
         # =================================================
         # RESPONSE VALIDATION
-        # =========================================================
+        # =================================================
 
         if not response:
 
@@ -316,7 +377,7 @@ async def search(
 
         # =================================================
         # ALL / TOPQUERY
-        # =========================================================
+        # =================================================
 
         if search_type in (
             "all",
@@ -541,7 +602,7 @@ async def search(
 
         # =================================================
         # SONG / ALBUM / PLAYLIST / ARTIST RESULTS
-        # =========================================================
+        # =================================================
 
         else:
 
@@ -729,7 +790,7 @@ async def search(
 
         # =================================================
         # NO RESULTS
-        # =========================================================
+        # =================================================
 
         if not buttons:
 
@@ -740,7 +801,7 @@ async def search(
 
         # =================================================
         # CLOSE BUTTON
-        # =========================================================
+        # =================================================
 
         buttons.append(
             [
@@ -753,7 +814,7 @@ async def search(
 
         # =================================================
         # SEND RESULTS
-        # =========================================================
+        # =================================================
 
         await send_msg.edit(
             text,
