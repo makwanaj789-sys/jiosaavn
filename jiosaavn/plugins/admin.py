@@ -352,6 +352,15 @@ def utf16_to_python_index(
 # =========================================================
 
 def extract_button_custom_emoji(message: Message):
+    """
+    Extract:
+    1. Clean button text
+    2. Telegram custom/premium emoji ID
+
+    Premium emoji ka fallback character button text se remove
+    kiya jata hai, kyunki actual emoji icon_custom_emoji_id
+    ke through button ke aage render hoga.
+    """
 
     original_text = message.text or ""
 
@@ -360,16 +369,28 @@ def extract_button_custom_emoji(message: Message):
 
     entities = message.entities or []
 
-    custom_entities = []
+    custom_ranges = []
     custom_emoji_id = None
 
     for entity in entities:
 
-        entity_type = str(
-            entity.type
-        ).lower()
+        # Pyrogram versions me entity.type enum/string
+        # representation different ho sakti hai.
+        entity_type = getattr(entity, "type", None)
 
-        if "custom_emoji" not in entity_type:
+        type_name = ""
+
+        if entity_type is not None:
+
+            # MessageEntityType.CUSTOM_EMOJI
+            name = getattr(entity_type, "name", None)
+
+            if name:
+                type_name = str(name).lower()
+            else:
+                type_name = str(entity_type).lower()
+
+        if "custom_emoji" not in type_name:
             continue
 
         emoji_id = getattr(
@@ -381,6 +402,7 @@ def extract_button_custom_emoji(message: Message):
         if emoji_id and custom_emoji_id is None:
             custom_emoji_id = str(emoji_id)
 
+        # Telegram offsets UTF-16 me hote hain
         start = utf16_to_python_index(
             original_text,
             entity.offset
@@ -391,33 +413,37 @@ def extract_button_custom_emoji(message: Message):
             entity.offset + entity.length
         )
 
-        custom_entities.append(
+        custom_ranges.append(
             (start, end)
         )
 
-    if not custom_entities:
+    # Normal emoji / no custom emoji
+    if not custom_ranges:
 
         return (
             original_text.strip(),
             None
         )
 
+    # Premium emoji ka fallback character remove karo
     clean_text = original_text
 
     for start, end in sorted(
-        custom_entities,
+        custom_ranges,
+        key=lambda x: x[0],
         reverse=True
     ):
-
         clean_text = (
             clean_text[:start]
             + clean_text[end:]
         )
 
+    # Extra spaces clean
     clean_text = " ".join(
         clean_text.split()
     )
 
+    # Telegram button text empty nahi ho sakta
     if not clean_text:
         clean_text = "\u2063"
 
@@ -696,46 +722,71 @@ async def post_creator_input(
         return
 
 
-    # =====================================================
-    # EDIT BUTTON NAME
-    # =====================================================
+# =====================================================
+# EDIT BUTTON NAME
+# =====================================================
 
-    if step == "edit_name_input":
+if step == "edit_name_input":
 
-        if not message.text:
-            return
+    if not message.text:
 
-        button = get_editing_button(session)
-
-        if not button:
-
-            session["step"] = "menu"
-
-            return await message.reply(
-                "❌ Button nahi mila."
-            )
-
-        (
-            button_text,
-            custom_emoji_id
-        ) = extract_button_custom_emoji(
-            message
+        return await message.reply(
+            "❌ Button ka naam text me bhejo."
         )
 
-        button["text"] = button_text
-        button["icon_custom_emoji_id"] = (
-            custom_emoji_id
+    button = get_editing_button(session)
+
+    if not button:
+
+        session["step"] = "menu"
+
+        return await message.reply(
+            "❌ Button nahi mila.",
+            reply_markup=post_menu_keyboard(session)
         )
 
-        session["step"] = "edit_menu"
+    # Fresh message se text + Premium emoji dobara detect karo
+    (
+        button_text,
+        custom_emoji_id
+    ) = extract_button_custom_emoji(
+        message
+    )
 
-        await message.reply(
-            "✅ **Button name updated!**",
-            reply_markup=edit_button_menu()
+    # Name completely replace
+    button["text"] = button_text
+
+    # IMPORTANT:
+    # Purana custom emoji preserve nahi karna.
+    # Naye message me premium emoji hai to new ID,
+    # nahi hai to None.
+    button["icon_custom_emoji_id"] = (
+        custom_emoji_id
+    )
+
+    session["step"] = "edit_menu"
+
+    if custom_emoji_id:
+
+        status_text = (
+            "✅ **Button name updated!**\n\n"
+            "✨ Premium/Custom emoji detected.\n"
+            "Premium emoji button icon me use hoga."
         )
 
-        return
+    else:
 
+        status_text = (
+            "✅ **Button name updated!**\n\n"
+            "🔘 Normal button text saved."
+        )
+
+    await message.reply(
+        status_text,
+        reply_markup=edit_button_menu()
+    )
+
+    return
 
     # =====================================================
     # EDIT BUTTON URL
