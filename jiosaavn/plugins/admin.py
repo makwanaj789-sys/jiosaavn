@@ -1,5 +1,4 @@
 import logging
-import aiohttp
 
 from pyrogram import filters
 from pyrogram.types import (
@@ -10,7 +9,7 @@ from pyrogram.types import (
 )
 
 from jiosaavn.bot import Bot
-from jiosaavn.config.settings import OWNER_ID, BOT_TOKEN
+from jiosaavn.config.settings import OWNER_ID
 
 
 logger = logging.getLogger(__name__)
@@ -33,6 +32,36 @@ def is_owner(user_id: int) -> bool:
 
 def is_post_creator_active(user_id: int) -> bool:
     return user_id in POST_SESSIONS
+
+
+# =========================================================
+# COMMON POST MENU
+# =========================================================
+
+def post_menu_keyboard():
+
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "➕ Add Button",
+                    callback_data="post_add_button"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "👀 Preview",
+                    callback_data="post_preview"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "❌ Cancel",
+                    callback_data="post_cancel"
+                )
+            ]
+        ]
+    )
 
 
 # =========================================================
@@ -208,7 +237,21 @@ async def create_post(
 
     POST_SESSIONS[user_id] = {
         "step": "message",
+
+        # Post type:
+        # text / photo / video
+        "type": None,
+
+        # Text or media caption
         "text": None,
+
+        # Telegram formatting entities
+        "entities": None,
+
+        # Telegram file_id for photo/video
+        "file_id": None,
+
+        # URL buttons
         "buttons": []
     }
 
@@ -216,10 +259,12 @@ async def create_post(
 
     await callback.message.edit_text(
         "📝 **AARTI POST CREATOR**\n\n"
-        "Ab apna post/message bhejo.\n\n"
-        "Example:\n\n"
-        "**🎵 Aarti Music Update**\n"
-        "New features are now available!\n\n"
+        "Ab apna post bhejo.\n\n"
+        "Supported:\n"
+        "📝 Text Message\n"
+        "🖼 Photo + Caption\n"
+        "🎥 Video + Caption\n\n"
+        "Media ke saath caption optional hai.\n\n"
         "❌ Cancel karne ke liye /cancel"
     )
 
@@ -255,11 +300,18 @@ async def cancel_creator(
 
 # =========================================================
 # POST INPUT HANDLER
+#
+# IMPORTANT:
+# Text + Photo + Video tino accept honge.
 # =========================================================
 
 @Bot.on_message(
     filters.private
-    & filters.text
+    & (
+        filters.text
+        | filters.photo
+        | filters.video
+    )
     & ~filters.command([
         "admin",
         "cancel",
@@ -290,49 +342,106 @@ async def post_creator_input(
 
     step = session.get("step")
 
+
     # =====================================================
-    # RECEIVE POST MESSAGE
+    # RECEIVE POST
     # =====================================================
 
     if step == "message":
 
-        session["text"] = message.text
+        # ---------------------------------------------
+        # VIDEO POST
+        # ---------------------------------------------
+
+        if message.video:
+
+            session["type"] = "video"
+            session["file_id"] = message.video.file_id
+
+            session["text"] = (
+                message.caption
+                if message.caption
+                else ""
+            )
+
+            session["entities"] = (
+                message.caption_entities
+                if message.caption_entities
+                else None
+            )
+
+            saved_type = "🎥 Video"
+
+
+        # ---------------------------------------------
+        # PHOTO POST
+        # ---------------------------------------------
+
+        elif message.photo:
+
+            session["type"] = "photo"
+
+            # Highest available photo resolution
+            session["file_id"] = message.photo.file_id
+
+            session["text"] = (
+                message.caption
+                if message.caption
+                else ""
+            )
+
+            session["entities"] = (
+                message.caption_entities
+                if message.caption_entities
+                else None
+            )
+
+            saved_type = "🖼 Photo"
+
+
+        # ---------------------------------------------
+        # TEXT POST
+        # ---------------------------------------------
+
+        elif message.text:
+
+            session["type"] = "text"
+            session["file_id"] = None
+            session["text"] = message.text
+
+            session["entities"] = (
+                message.entities
+                if message.entities
+                else None
+            )
+
+            saved_type = "📝 Message"
+
+        else:
+            return
+
+
         session["step"] = "menu"
 
         await message.reply(
-            "✅ **Message Saved!**\n\n"
+            f"✅ **{saved_type} Saved!**\n\n"
             "Ab kya karna hai?",
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "➕ Add Button",
-                            callback_data="post_add_button"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "👀 Preview",
-                            callback_data="post_preview"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "❌ Cancel",
-                            callback_data="post_cancel"
-                        )
-                    ]
-                ]
-            )
+            reply_markup=post_menu_keyboard()
         )
 
         return
+
 
     # =====================================================
     # BUTTON NAME
     # =====================================================
 
     if step == "button_name":
+
+        if not message.text:
+            return await message.reply(
+                "❌ Button ka naam text me bhejo."
+            )
 
         session["current_button"] = {
             "text": message.text.strip()
@@ -348,11 +457,17 @@ async def post_creator_input(
 
         return
 
+
     # =====================================================
     # BUTTON URL
     # =====================================================
 
     if step == "button_url":
+
+        if not message.text:
+            return await message.reply(
+                "❌ URL text me bhejo."
+            )
 
         url = message.text.strip()
 
@@ -406,11 +521,17 @@ async def post_creator_input(
 
         return
 
+
     # =====================================================
     # TARGET CHAT
     # =====================================================
 
     if step == "target":
+
+        if not message.text:
+            return await message.reply(
+                "❌ Chat ID text me bhejo."
+            )
 
         target = message.text.strip()
 
@@ -434,10 +555,10 @@ async def post_creator_input(
 
         try:
 
-            await send_post_via_bot_api(
+            await send_created_post(
+                client=client,
                 chat_id=chat_id,
-                text=session["text"],
-                buttons=session["buttons"]
+                session=session
             )
 
             POST_SESSIONS.pop(
@@ -457,8 +578,10 @@ async def post_creator_input(
 
             await message.reply(
                 "❌ **Post send nahi hua.**\n\n"
-                f"`{e}`"
+                f"`{type(e).__name__}: {e}`"
             )
+
+        return
 
 
 # =========================================================
@@ -542,7 +665,6 @@ async def post_button_color(
 
     if color == "default":
         current_button["style"] = None
-
     else:
         current_button["style"] = color
 
@@ -592,72 +714,138 @@ async def post_button_color(
 
 
 # =========================================================
-# RAW BOT API SEND
+# BUILD INLINE KEYBOARD
 # =========================================================
 
-async def send_post_via_bot_api(
-    chat_id,
-    text,
-    buttons
-):
+def build_post_keyboard(buttons):
 
-    inline_keyboard = []
+    if not buttons:
+        return None
+
+    rows = []
 
     for button in buttons:
 
-        button_data = {
+        kwargs = {
             "text": button["text"],
             "url": button["url"]
         }
 
+        # Telegram/Pyrogram versions which support
+        # styled buttons can use this.
         style = button.get("style")
 
         if style:
-            button_data["style"] = style
+            kwargs["style"] = style
 
-        inline_keyboard.append(
-            [button_data]
-        )
+        try:
 
-    payload = {
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "link_preview_options": {
-            "is_disabled": True
-        }
-    }
+            btn = InlineKeyboardButton(
+                **kwargs
+            )
 
-    if inline_keyboard:
+        except TypeError:
 
-        payload["reply_markup"] = {
-            "inline_keyboard": inline_keyboard
-        }
+            # Compatibility fallback if current
+            # Pyrogram version doesn't support style.
+            kwargs.pop("style", None)
 
-    api_url = (
-        f"https://api.telegram.org/"
-        f"bot{BOT_TOKEN}/sendMessage"
+            btn = InlineKeyboardButton(
+                **kwargs
+            )
+
+        rows.append([btn])
+
+    return InlineKeyboardMarkup(rows)
+
+
+# =========================================================
+# SEND CREATED POST
+# =========================================================
+
+async def send_created_post(
+    client: Bot,
+    chat_id,
+    session
+):
+
+    post_type = session.get("type")
+
+    text = session.get("text") or ""
+
+    file_id = session.get("file_id")
+
+    entities = session.get("entities")
+
+    keyboard = build_post_keyboard(
+        session.get("buttons", [])
     )
 
-    async with aiohttp.ClientSession() as http:
 
-        async with http.post(
-            api_url,
-            json=payload
-        ) as response:
+    # =====================================================
+    # TEXT
+    # =====================================================
 
-            result = await response.json()
+    if post_type == "text":
 
-            if not result.get("ok"):
+        if not text:
+            raise ValueError(
+                "Post text missing."
+            )
 
-                raise RuntimeError(
-                    result.get(
-                        "description",
-                        "Telegram API Error"
-                    )
-                )
+        return await client.send_message(
+            chat_id=chat_id,
+            text=text,
+            entities=entities,
+            reply_markup=keyboard,
+            disable_web_page_preview=True
+        )
 
-            return result
+
+    # =====================================================
+    # PHOTO
+    # =====================================================
+
+    if post_type == "photo":
+
+        if not file_id:
+            raise ValueError(
+                "Photo file_id missing."
+            )
+
+        return await client.send_photo(
+            chat_id=chat_id,
+            photo=file_id,
+            caption=text if text else None,
+            caption_entities=entities,
+            reply_markup=keyboard
+        )
+
+
+    # =====================================================
+    # VIDEO
+    # =====================================================
+
+    if post_type == "video":
+
+        if not file_id:
+            raise ValueError(
+                "Video file_id missing."
+            )
+
+        return await client.send_video(
+            chat_id=chat_id,
+            video=file_id,
+            caption=text if text else None,
+            caption_entities=entities,
+            reply_markup=keyboard,
+            supports_streaming=True
+        )
+
+
+    raise ValueError(
+        "Unknown post type."
+    )
 
 
 # =========================================================
@@ -690,10 +878,11 @@ async def post_preview(
 
     try:
 
-        await send_post_via_bot_api(
+        # Actual post preview
+        await send_created_post(
+            client=client,
             chat_id=user_id,
-            text=session["text"],
-            buttons=session["buttons"]
+            session=session
         )
 
         await callback.message.reply(
@@ -731,7 +920,7 @@ async def post_preview(
 
         await callback.message.reply(
             "❌ Preview failed:\n"
-            f"`{e}`"
+            f"`{type(e).__name__}: {e}`"
         )
 
 
@@ -802,9 +991,17 @@ async def post_cancel(
         "Cancelled"
     )
 
-    await callback.message.edit_text(
-        "❌ **Post Creator Cancelled.**"
-    )
+    try:
+
+        await callback.message.edit_text(
+            "❌ **Post Creator Cancelled.**"
+        )
+
+    except Exception:
+
+        await callback.message.reply(
+            "❌ **Post Creator Cancelled.**"
+        )
 
 
 # =========================================================
