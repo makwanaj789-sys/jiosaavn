@@ -65,18 +65,43 @@ def admin_keyboard():
 
 
 # =========================================================
+# COUNT BUTTONS
+# =========================================================
+
+def total_buttons(session):
+    return sum(
+        len(row)
+        for row in session.get("button_rows", [])
+    )
+
+
+# =========================================================
 # POST MENU
 # =========================================================
 
-def post_menu_keyboard():
-    return InlineKeyboardMarkup(
+def post_menu_keyboard(session=None):
+
+    keyboard = [
         [
+            InlineKeyboardButton(
+                "➕ Add Button",
+                callback_data="post_add_button"
+            )
+        ]
+    ]
+
+    if session and total_buttons(session) > 0:
+        keyboard.append(
             [
                 InlineKeyboardButton(
-                    "➕ Add Button",
-                    callback_data="post_add_button"
+                    "✏️ Edit Buttons",
+                    callback_data="post_edit_buttons"
                 )
-            ],
+            ]
+        )
+
+    keyboard.extend(
+        [
             [
                 InlineKeyboardButton(
                     "👀 Preview",
@@ -91,6 +116,8 @@ def post_menu_keyboard():
             ]
         ]
     )
+
+    return InlineKeyboardMarkup(keyboard)
 
 
 # =========================================================
@@ -159,9 +186,7 @@ async def admin_panel(
 
     except Exception as e:
 
-        logger.exception(
-            "Admin panel error"
-        )
+        logger.exception("Admin panel error")
 
         await message.reply(
             "❌ Admin panel error:\n"
@@ -182,7 +207,6 @@ async def admin_refresh(
 ):
 
     if not is_owner(callback.from_user.id):
-
         return await callback.answer(
             "Not allowed.",
             show_alert=True
@@ -197,15 +221,11 @@ async def admin_refresh(
             reply_markup=admin_keyboard()
         )
 
-        await callback.answer(
-            "Updated ✅"
-        )
+        await callback.answer("Updated ✅")
 
     except Exception:
 
-        logger.exception(
-            "Stats refresh error"
-        )
+        logger.exception("Stats refresh error")
 
         await callback.answer(
             "Refresh failed.",
@@ -226,7 +246,6 @@ async def create_post(
 ):
 
     if not is_owner(callback.from_user.id):
-
         return await callback.answer(
             "Not allowed.",
             show_alert=True
@@ -237,23 +256,17 @@ async def create_post(
     POST_SESSIONS[user_id] = {
         "step": "message",
 
-        # Post data
         "type": None,
         "text": None,
         "file_id": None,
 
-        # Keyboard rows
-        #
-        # Example:
-        #
-        # [
-        #     [button1],
-        #     [button2, button3]
-        # ]
-        #
         "button_rows": [],
 
-        "current_button": None
+        "current_button": None,
+
+        # Edit data
+        "editing_row": None,
+        "editing_col": None
     }
 
     await callback.answer()
@@ -305,7 +318,6 @@ async def cancel_creator(
 
 # =========================================================
 # UTF-16 HELPERS
-# Telegram entity offsets are UTF-16 based
 # =========================================================
 
 def utf16_to_python_index(
@@ -336,12 +348,10 @@ def utf16_to_python_index(
 
 
 # =========================================================
-# EXTRACT CUSTOM EMOJI
+# EXTRACT PREMIUM CUSTOM EMOJI
 # =========================================================
 
-def extract_button_custom_emoji(
-    message: Message
-):
+def extract_button_custom_emoji(message: Message):
 
     original_text = message.text or ""
 
@@ -351,7 +361,6 @@ def extract_button_custom_emoji(
     entities = message.entities or []
 
     custom_entities = []
-
     custom_emoji_id = None
 
     for entity in entities:
@@ -369,13 +378,8 @@ def extract_button_custom_emoji(
             None
         )
 
-        if (
-            emoji_id
-            and custom_emoji_id is None
-        ):
-            custom_emoji_id = str(
-                emoji_id
-            )
+        if emoji_id and custom_emoji_id is None:
+            custom_emoji_id = str(emoji_id)
 
         start = utf16_to_python_index(
             original_text,
@@ -391,24 +395,12 @@ def extract_button_custom_emoji(
             (start, end)
         )
 
-    # -----------------------------------------
-    # No Premium emoji
-    # -----------------------------------------
-
     if not custom_entities:
 
         return (
             original_text.strip(),
             None
         )
-
-    # -----------------------------------------
-    # Remove custom emoji fallback characters
-    # from actual button text.
-    #
-    # Telegram will render Premium emoji using
-    # icon_custom_emoji_id.
-    # -----------------------------------------
 
     clean_text = original_text
 
@@ -422,19 +414,85 @@ def extract_button_custom_emoji(
             + clean_text[end:]
         )
 
-    # Remove double spaces
     clean_text = " ".join(
         clean_text.split()
     )
 
-    # Telegram button still needs text
     if not clean_text:
-
         clean_text = "\u2063"
 
     return (
         clean_text,
         custom_emoji_id
+    )
+
+
+# =========================================================
+# GET EDITING BUTTON
+# =========================================================
+
+def get_editing_button(session):
+
+    row_index = session.get("editing_row")
+    col_index = session.get("editing_col")
+
+    if row_index is None or col_index is None:
+        return None
+
+    rows = session.get("button_rows", [])
+
+    if row_index >= len(rows):
+        return None
+
+    if col_index >= len(rows[row_index]):
+        return None
+
+    return rows[row_index][col_index]
+
+
+# =========================================================
+# EDIT BUTTON MENU
+# =========================================================
+
+def edit_button_menu():
+
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "✏️ Name / Emoji",
+                    callback_data="post_edit_name"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔗 URL",
+                    callback_data="post_edit_url"
+                ),
+                InlineKeyboardButton(
+                    "🎨 Colour",
+                    callback_data="post_edit_color"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "📐 Move / Layout",
+                    callback_data="post_edit_layout"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🗑 Delete Button",
+                    callback_data="post_edit_delete"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⬅️ Back",
+                    callback_data="post_edit_buttons"
+                )
+            ]
+        ]
     )
 
 
@@ -472,9 +530,7 @@ async def post_creator_input(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(
-        user_id
-    )
+    session = POST_SESSIONS.get(user_id)
 
     if not session:
         return
@@ -488,51 +544,23 @@ async def post_creator_input(
 
     if step == "message":
 
-        # -------------------------------
-        # TEXT
-        # -------------------------------
-
         if message.text:
 
             session["type"] = "text"
-
-            session["text"] = (
-                message.text
-            )
-
+            session["text"] = message.text
             session["file_id"] = None
-
-        # -------------------------------
-        # PHOTO
-        # -------------------------------
 
         elif message.photo:
 
             session["type"] = "photo"
-
-            session["text"] = (
-                message.caption or ""
-            )
-
-            session["file_id"] = (
-                message.photo.file_id
-            )
-
-        # -------------------------------
-        # VIDEO
-        # -------------------------------
+            session["text"] = message.caption or ""
+            session["file_id"] = message.photo.file_id
 
         elif message.video:
 
             session["type"] = "video"
-
-            session["text"] = (
-                message.caption or ""
-            )
-
-            session["file_id"] = (
-                message.video.file_id
-            )
+            session["text"] = message.caption or ""
+            session["file_id"] = message.video.file_id
 
         else:
 
@@ -545,14 +573,14 @@ async def post_creator_input(
         await message.reply(
             "✅ **Post Saved!**\n\n"
             "Ab button add karo ya preview dekho.",
-            reply_markup=post_menu_keyboard()
+            reply_markup=post_menu_keyboard(session)
         )
 
         return
 
 
     # =====================================================
-    # BUTTON NAME
+    # NEW BUTTON NAME
     # =====================================================
 
     if step == "button_name":
@@ -562,11 +590,6 @@ async def post_creator_input(
             return await message.reply(
                 "❌ Button ka naam text me bhejo."
             )
-
-        # -----------------------------------------
-        # Detect Premium custom emoji and remove
-        # fallback emoji from button text.
-        # -----------------------------------------
 
         (
             button_text,
@@ -579,9 +602,7 @@ async def post_creator_input(
             "text": button_text,
             "url": None,
             "style": None,
-            "icon_custom_emoji_id": (
-                custom_emoji_id
-            )
+            "icon_custom_emoji_id": custom_emoji_id
         }
 
         session["step"] = "button_url"
@@ -590,12 +611,8 @@ async def post_creator_input(
 
             await message.reply(
                 "🔗 **Button URL bhejo**\n\n"
-
                 "✨ Premium/Custom emoji detected!\n\n"
-
-                "Premium emoji button ke icon me "
-                "automatically use hoga.\n\n"
-
+                "Premium emoji button icon me use hoga.\n\n"
                 "Example:\n"
                 "`https://t.me/yourchannel`"
             )
@@ -612,7 +629,7 @@ async def post_creator_input(
 
 
     # =====================================================
-    # BUTTON URL
+    # NEW BUTTON URL
     # =====================================================
 
     if step == "button_url":
@@ -630,7 +647,6 @@ async def post_creator_input(
 
             return await message.reply(
                 "❌ Invalid URL.\n\n"
-
                 "URL `https://`, `http://` "
                 "ya `tg://` se start honi chahiye."
             )
@@ -656,29 +672,21 @@ async def post_creator_input(
                     [
                         InlineKeyboardButton(
                             "🔵 Blue",
-                            callback_data=(
-                                "post_color_primary"
-                            )
+                            callback_data="post_color_primary"
                         ),
                         InlineKeyboardButton(
                             "🟢 Green",
-                            callback_data=(
-                                "post_color_success"
-                            )
+                            callback_data="post_color_success"
                         )
                     ],
                     [
                         InlineKeyboardButton(
                             "🔴 Red",
-                            callback_data=(
-                                "post_color_danger"
-                            )
+                            callback_data="post_color_danger"
                         ),
                         InlineKeyboardButton(
                             "⚪ Normal",
-                            callback_data=(
-                                "post_color_default"
-                            )
+                            callback_data="post_color_default"
                         )
                     ]
                 ]
@@ -689,7 +697,93 @@ async def post_creator_input(
 
 
     # =====================================================
-    # TARGET CHAT
+    # EDIT BUTTON NAME
+    # =====================================================
+
+    if step == "edit_name_input":
+
+        if not message.text:
+            return
+
+        button = get_editing_button(session)
+
+        if not button:
+
+            session["step"] = "menu"
+
+            return await message.reply(
+                "❌ Button nahi mila."
+            )
+
+        (
+            button_text,
+            custom_emoji_id
+        ) = extract_button_custom_emoji(
+            message
+        )
+
+        button["text"] = button_text
+        button["icon_custom_emoji_id"] = (
+            custom_emoji_id
+        )
+
+        session["step"] = "edit_menu"
+
+        await message.reply(
+            "✅ **Button name updated!**",
+            reply_markup=edit_button_menu()
+        )
+
+        return
+
+
+    # =====================================================
+    # EDIT BUTTON URL
+    # =====================================================
+
+    if step == "edit_url_input":
+
+        if not message.text:
+            return
+
+        url = message.text.strip()
+
+        if not (
+            url.startswith("https://")
+            or url.startswith("http://")
+            or url.startswith("tg://")
+        ):
+
+            return await message.reply(
+                "❌ Invalid URL.\n\n"
+                "`https://`, `http://` ya `tg://` "
+                "se start karo."
+            )
+
+        button = get_editing_button(session)
+
+        if not button:
+
+            session["step"] = "menu"
+
+            return await message.reply(
+                "❌ Button nahi mila."
+            )
+
+        button["url"] = url
+
+        session["step"] = "edit_menu"
+
+        await message.reply(
+            "✅ **Button URL updated!**",
+            reply_markup=edit_button_menu()
+        )
+
+        return
+
+
+    # =====================================================
+    # TARGET
     # =====================================================
 
     if step == "target":
@@ -707,27 +801,21 @@ async def post_creator_input(
 
             try:
 
-                chat_id = int(
-                    target
-                )
+                chat_id = int(target)
 
             except ValueError:
 
                 if target.startswith("@"):
-
                     chat_id = target
 
                 else:
 
                     return await message.reply(
                         "❌ Invalid Chat ID.\n\n"
-
                         "Example:\n"
                         "`-1001234567890`\n\n"
-
                         "Public channel:\n"
                         "`@channelusername`\n\n"
-
                         "Ya `me` bhejo."
                     )
 
@@ -778,9 +866,7 @@ async def post_add_button(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(
-        user_id
-    )
+    session = POST_SESSIONS.get(user_id)
 
     if not session:
 
@@ -797,14 +883,8 @@ async def post_add_button(
 
         await callback.message.edit_text(
             "🔘 **Button ka naam bhejo**\n\n"
-
             "Normal emoji ya Telegram Premium "
             "custom emoji bhi use kar sakte ho.\n\n"
-
-            "Premium emoji detect hone par uska "
-            "normal duplicate automatically remove "
-            "ho jayega.\n\n"
-
             "Example:\n"
             "`Clon Tools ⚡`"
         )
@@ -817,7 +897,7 @@ async def post_add_button(
 
 
 # =========================================================
-# BUTTON COLOR
+# NEW BUTTON COLOR
 # =========================================================
 
 @Bot.on_callback_query(
@@ -833,9 +913,7 @@ async def post_button_color(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(
-        user_id
-    )
+    session = POST_SESSIONS.get(user_id)
 
     if not session:
 
@@ -861,21 +939,13 @@ async def post_button_color(
     )
 
     if color == "default":
-
         current_button["style"] = None
-
     else:
-
         current_button["style"] = color
-
-    session["step"] = "button_layout"
 
     await callback.answer()
 
-    # =====================================================
-    # FIRST BUTTON
-    # First button automatically gets first row.
-    # =====================================================
+    # First button automatically first row
 
     if not session["button_rows"]:
 
@@ -884,34 +954,24 @@ async def post_button_color(
         )
 
         session["current_button"] = None
-
         session["step"] = "menu"
 
         await callback.message.edit_text(
             "✅ **Button Added!**\n\n"
-
             "📐 Row: `1`\n"
             "🔘 Position: `1`\n\n"
-
             "Ab kya karna hai?",
-            reply_markup=post_menu_keyboard()
+            reply_markup=post_menu_keyboard(session)
         )
 
         return
 
-
-    # =====================================================
-    # ASK ROW POSITION
-    # =====================================================
+    session["step"] = "button_layout"
 
     await callback.message.edit_text(
         "📐 **Button kaha rakhna hai?**\n\n"
-
-        "🆕 **New Row**\n"
-        "Button alag line me aayega.\n\n"
-
-        "↔️ **Same Row**\n"
-        "Pichle button ke saath same line me aayega.",
+        "🆕 **New Row** — alag line\n\n"
+        "↔️ **Same Row** — pichle button ke saath",
         reply_markup=InlineKeyboardMarkup(
             [
                 [
@@ -932,7 +992,7 @@ async def post_button_color(
 
 
 # =========================================================
-# BUTTON LAYOUT
+# NEW BUTTON LAYOUT
 # =========================================================
 
 @Bot.on_callback_query(
@@ -948,9 +1008,7 @@ async def post_button_layout(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(
-        user_id
-    )
+    session = POST_SESSIONS.get(user_id)
 
     if not session:
 
@@ -977,11 +1035,6 @@ async def post_button_layout(
 
     rows = session["button_rows"]
 
-
-    # =====================================================
-    # SAME ROW
-    # =====================================================
-
     if layout == "same":
 
         if not rows:
@@ -990,27 +1043,17 @@ async def post_button_layout(
                 [current_button]
             )
 
+        elif len(rows[-1]) >= 2:
+
+            rows.append(
+                [current_button]
+            )
+
         else:
 
-            # Max 2 buttons per row
-            # keeps Telegram keyboard clean.
-
-            if len(rows[-1]) >= 2:
-
-                rows.append(
-                    [current_button]
-                )
-
-            else:
-
-                rows[-1].append(
-                    current_button
-                )
-
-
-    # =====================================================
-    # NEW ROW
-    # =====================================================
+            rows[-1].append(
+                current_button
+            )
 
     else:
 
@@ -1018,15 +1061,8 @@ async def post_button_layout(
             [current_button]
         )
 
-
     session["current_button"] = None
-
     session["step"] = "menu"
-
-    total_buttons = sum(
-        len(row)
-        for row in rows
-    )
 
     await callback.answer(
         "Button added ✅"
@@ -1034,12 +1070,831 @@ async def post_button_layout(
 
     await callback.message.edit_text(
         "✅ **Button Added!**\n\n"
-
-        f"🔘 Total Buttons: `{total_buttons}`\n"
+        f"🔘 Total Buttons: `{total_buttons(session)}`\n"
         f"📐 Total Rows: `{len(rows)}`\n\n"
-
         "Ab kya karna hai?",
-        reply_markup=post_menu_keyboard()
+        reply_markup=post_menu_keyboard(session)
+    )
+
+
+# =========================================================
+# EDIT BUTTONS LIST
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_edit_buttons$")
+)
+async def post_edit_buttons(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+
+        return await callback.answer(
+            "Session expired.",
+            show_alert=True
+        )
+
+    rows = session.get(
+        "button_rows",
+        []
+    )
+
+    if not rows:
+
+        return await callback.answer(
+            "Koi button nahi hai.",
+            show_alert=True
+        )
+
+    keyboard = []
+
+    for row_index, row in enumerate(rows):
+
+        for col_index, button in enumerate(row):
+
+            name = button.get(
+                "text",
+                "Button"
+            )
+
+            if len(name) > 25:
+                name = name[:22] + "..."
+
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"✏️ R{row_index + 1} • {name}",
+                        callback_data=(
+                            f"post_select_edit_"
+                            f"{row_index}_{col_index}"
+                        )
+                    )
+                ]
+            )
+
+    keyboard.append(
+        [
+            InlineKeyboardButton(
+                "⬅️ Back",
+                callback_data="post_back_menu"
+            )
+        ]
+    )
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "✏️ **EDIT BUTTONS**\n\n"
+        "Jis button ko edit karna hai "
+        "use select karo:",
+        reply_markup=InlineKeyboardMarkup(
+            keyboard
+        )
+    )
+
+
+# =========================================================
+# SELECT BUTTON FOR EDIT
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_select_edit_")
+)
+async def post_select_edit(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+
+        return await callback.answer(
+            "Session expired.",
+            show_alert=True
+        )
+
+    try:
+
+        data = callback.data.replace(
+            "post_select_edit_",
+            ""
+        )
+
+        row_index, col_index = map(
+            int,
+            data.split("_")
+        )
+
+        button = (
+            session["button_rows"]
+            [row_index]
+            [col_index]
+        )
+
+    except Exception:
+
+        return await callback.answer(
+            "Button nahi mila.",
+            show_alert=True
+        )
+
+    session["editing_row"] = row_index
+    session["editing_col"] = col_index
+    session["step"] = "edit_menu"
+
+    style = button.get("style") or "Normal"
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "✏️ **EDIT BUTTON**\n\n"
+
+        f"🔘 Name: `{button.get('text', '')}`\n"
+        f"🔗 URL: `{button.get('url', '')}`\n"
+        f"🎨 Colour: `{style}`\n"
+        f"📐 Row: `{row_index + 1}`\n"
+        f"📍 Position: `{col_index + 1}`\n\n"
+
+        "Kya edit karna hai?",
+        reply_markup=edit_button_menu()
+    )
+
+
+# =========================================================
+# EDIT NAME
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_edit_name$")
+)
+async def post_edit_name(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    session["step"] = "edit_name_input"
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "✏️ **Naya button name bhejo**\n\n"
+        "Premium/Custom emoji bhi bhej sakte ho."
+    )
+
+
+# =========================================================
+# EDIT URL
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_edit_url$")
+)
+async def post_edit_url(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    session["step"] = "edit_url_input"
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "🔗 **Naya URL bhejo**\n\n"
+        "Example:\n"
+        "`https://t.me/yourchannel`"
+    )
+
+
+# =========================================================
+# EDIT COLOR MENU
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_edit_color$")
+)
+async def post_edit_color(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "🎨 **Naya button colour select karo:**",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "🔵 Blue",
+                        callback_data="post_set_edit_color_primary"
+                    ),
+                    InlineKeyboardButton(
+                        "🟢 Green",
+                        callback_data="post_set_edit_color_success"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🔴 Red",
+                        callback_data="post_set_edit_color_danger"
+                    ),
+                    InlineKeyboardButton(
+                        "⚪ Normal",
+                        callback_data="post_set_edit_color_default"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "⬅️ Back",
+                        callback_data="post_edit_current_back"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+# =========================================================
+# SET EDIT COLOR
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_set_edit_color_")
+)
+async def post_set_edit_color(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    button = get_editing_button(
+        session
+    )
+
+    if not button:
+
+        return await callback.answer(
+            "Button nahi mila.",
+            show_alert=True
+        )
+
+    color = callback.data.replace(
+        "post_set_edit_color_",
+        ""
+    )
+
+    if color == "default":
+        button["style"] = None
+    else:
+        button["style"] = color
+
+    session["step"] = "edit_menu"
+
+    await callback.answer(
+        "Colour updated ✅"
+    )
+
+    await callback.message.edit_text(
+        "✅ **Button colour updated!**\n\n"
+        "Aur kuch edit karna hai?",
+        reply_markup=edit_button_menu()
+    )
+
+
+# =========================================================
+# EDIT LAYOUT MENU
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_edit_layout$")
+)
+async def post_edit_layout(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "📐 **BUTTON POSITION**\n\n"
+
+        "Button ko kaha move karna hai?\n\n"
+
+        "⬆️ Previous Row\n"
+        "⬇️ Next Row\n"
+        "↔️ Previous button ke saath same row\n\n"
+
+        "Maximum 2 buttons ek row me rakhe jayenge.",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "⬆️ Previous Row",
+                        callback_data="post_move_previous"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "⬇️ Next Row",
+                        callback_data="post_move_next"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "↔️ Same With Previous",
+                        callback_data="post_move_same_previous"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "⬅️ Back",
+                        callback_data="post_edit_current_back"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+# =========================================================
+# NORMALIZE EMPTY ROWS
+# =========================================================
+
+def remove_empty_rows(session):
+
+    session["button_rows"] = [
+        row
+        for row in session.get(
+            "button_rows",
+            []
+        )
+        if row
+    ]
+
+
+# =========================================================
+# MOVE PREVIOUS ROW
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_move_previous$")
+)
+async def post_move_previous(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    row_index = session.get("editing_row")
+    col_index = session.get("editing_col")
+
+    if row_index is None or col_index is None:
+        return
+
+    if row_index <= 0:
+
+        return await callback.answer(
+            "Ye already first row me hai.",
+            show_alert=True
+        )
+
+    button = session["button_rows"][
+        row_index
+    ].pop(col_index)
+
+    # Put it in its own row above
+    session["button_rows"].insert(
+        row_index - 1,
+        [button]
+    )
+
+    remove_empty_rows(session)
+
+    session["editing_row"] = None
+    session["editing_col"] = None
+    session["step"] = "menu"
+
+    await callback.answer(
+        "Button moved ✅"
+    )
+
+    await callback.message.edit_text(
+        "✅ **Button previous row me move ho gaya.**",
+        reply_markup=post_menu_keyboard(session)
+    )
+
+
+# =========================================================
+# MOVE NEXT ROW
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_move_next$")
+)
+async def post_move_next(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    row_index = session.get("editing_row")
+    col_index = session.get("editing_col")
+
+    if row_index is None or col_index is None:
+        return
+
+    rows = session["button_rows"]
+
+    button = rows[
+        row_index
+    ].pop(col_index)
+
+    remove_empty_rows(session)
+
+    # Find position after original area
+    new_index = min(
+        row_index + 1,
+        len(session["button_rows"])
+    )
+
+    session["button_rows"].insert(
+        new_index,
+        [button]
+    )
+
+    session["editing_row"] = None
+    session["editing_col"] = None
+    session["step"] = "menu"
+
+    await callback.answer(
+        "Button moved ✅"
+    )
+
+    await callback.message.edit_text(
+        "✅ **Button next row me move ho gaya.**",
+        reply_markup=post_menu_keyboard(session)
+    )
+
+
+# =========================================================
+# SAME ROW WITH PREVIOUS BUTTON
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_move_same_previous$")
+)
+async def post_move_same_previous(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    row_index = session.get("editing_row")
+    col_index = session.get("editing_col")
+
+    if row_index is None or col_index is None:
+        return
+
+    if row_index <= 0:
+
+        return await callback.answer(
+            "Previous row available nahi hai.",
+            show_alert=True
+        )
+
+    rows = session["button_rows"]
+
+    previous_row = rows[
+        row_index - 1
+    ]
+
+    if len(previous_row) >= 2:
+
+        return await callback.answer(
+            "Previous row me already 2 buttons hain.",
+            show_alert=True
+        )
+
+    button = rows[
+        row_index
+    ].pop(col_index)
+
+    previous_row.append(
+        button
+    )
+
+    remove_empty_rows(session)
+
+    session["editing_row"] = None
+    session["editing_col"] = None
+    session["step"] = "menu"
+
+    await callback.answer(
+        "Layout updated ✅"
+    )
+
+    await callback.message.edit_text(
+        "✅ **Button previous button ke "
+        "saath same row me aa gaya.**",
+        reply_markup=post_menu_keyboard(session)
+    )
+
+
+# =========================================================
+# DELETE BUTTON
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_edit_delete$")
+)
+async def post_edit_delete(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    button = get_editing_button(
+        session
+    )
+
+    if not button:
+
+        return await callback.answer(
+            "Button nahi mila.",
+            show_alert=True
+        )
+
+    name = button.get(
+        "text",
+        "Button"
+    )
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "⚠️ **DELETE BUTTON?**\n\n"
+        f"🔘 `{name}`\n\n"
+        "Ye button permanently remove ho jayega.",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "🗑 Yes, Delete",
+                        callback_data="post_confirm_delete"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "⬅️ No, Back",
+                        callback_data="post_edit_current_back"
+                    )
+                ]
+            ]
+        )
+    )
+
+
+# =========================================================
+# CONFIRM DELETE
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_confirm_delete$")
+)
+async def post_confirm_delete(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    row_index = session.get(
+        "editing_row"
+    )
+
+    col_index = session.get(
+        "editing_col"
+    )
+
+    try:
+
+        session["button_rows"][
+            row_index
+        ].pop(
+            col_index
+        )
+
+    except Exception:
+
+        return await callback.answer(
+            "Delete failed.",
+            show_alert=True
+        )
+
+    remove_empty_rows(session)
+
+    session["editing_row"] = None
+    session["editing_col"] = None
+    session["step"] = "menu"
+
+    await callback.answer(
+        "Deleted ✅"
+    )
+
+    await callback.message.edit_text(
+        "🗑 **Button deleted!**\n\n"
+        f"🔘 Remaining: `{total_buttons(session)}`",
+        reply_markup=post_menu_keyboard(session)
+    )
+
+
+# =========================================================
+# BACK TO CURRENT EDIT MENU
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_edit_current_back$")
+)
+async def post_edit_current_back(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    button = get_editing_button(
+        session
+    )
+
+    if not button:
+
+        return await callback.answer(
+            "Button missing.",
+            show_alert=True
+        )
+
+    session["step"] = "edit_menu"
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "✏️ **EDIT BUTTON**\n\n"
+        f"🔘 `{button.get('text', '')}`\n\n"
+        "Kya edit karna hai?",
+        reply_markup=edit_button_menu()
+    )
+
+
+# =========================================================
+# BACK TO POST MENU
+# =========================================================
+
+@Bot.on_callback_query(
+    filters.regex(r"^post_back_menu$")
+)
+async def post_back_menu(
+    client: Bot,
+    callback: CallbackQuery
+):
+
+    user_id = callback.from_user.id
+
+    if not is_owner(user_id):
+        return
+
+    session = POST_SESSIONS.get(user_id)
+
+    if not session:
+        return
+
+    session["step"] = "menu"
+    session["editing_row"] = None
+    session["editing_col"] = None
+
+    await callback.answer()
+
+    await callback.message.edit_text(
+        "📝 **POST CREATOR**\n\n"
+        f"🔘 Buttons: `{total_buttons(session)}`\n"
+        f"📐 Rows: `{len(session['button_rows'])}`\n\n"
+        "Ab kya karna hai?",
+        reply_markup=post_menu_keyboard(session)
     )
 
 
@@ -1047,9 +1902,7 @@ async def post_button_layout(
 # BUILD INLINE KEYBOARD
 # =========================================================
 
-def build_inline_keyboard(
-    session
-):
+def build_inline_keyboard(session):
 
     inline_keyboard = []
 
@@ -1067,12 +1920,10 @@ def build_inline_keyboard(
                 "url": button["url"]
             }
 
-            # -----------------------------------------
-            # BUTTON COLOR
+            # Telegram Bot API button style:
             # primary = blue
             # success = green
             # danger  = red
-            # -----------------------------------------
 
             style = button.get(
                 "style"
@@ -1082,10 +1933,7 @@ def build_inline_keyboard(
 
                 button_data["style"] = style
 
-
-            # -----------------------------------------
-            # PREMIUM CUSTOM EMOJI ICON
-            # -----------------------------------------
+            # Premium Custom Emoji
 
             custom_emoji_id = button.get(
                 "icon_custom_emoji_id"
@@ -1111,7 +1959,7 @@ def build_inline_keyboard(
 
 
 # =========================================================
-# TELEGRAM RAW API REQUEST
+# TELEGRAM RAW API
 # =========================================================
 
 async def telegram_api_request(
@@ -1146,7 +1994,7 @@ async def telegram_api_request(
 
 
 # =========================================================
-# SEND POST VIA BOT API
+# SEND POST
 # =========================================================
 
 async def send_post_via_bot_api(
@@ -1167,10 +2015,8 @@ async def send_post_via_bot_api(
         "file_id"
     )
 
-    inline_keyboard = (
-        build_inline_keyboard(
-            session
-        )
+    inline_keyboard = build_inline_keyboard(
+        session
     )
 
     reply_markup = None
@@ -1183,7 +2029,7 @@ async def send_post_via_bot_api(
 
 
     # =====================================================
-    # TEXT POST
+    # TEXT
     # =====================================================
 
     if post_type == "text":
@@ -1198,10 +2044,7 @@ async def send_post_via_bot_api(
         }
 
         if reply_markup:
-
-            payload["reply_markup"] = (
-                reply_markup
-            )
+            payload["reply_markup"] = reply_markup
 
         return await telegram_api_request(
             "sendMessage",
@@ -1210,7 +2053,7 @@ async def send_post_via_bot_api(
 
 
     # =====================================================
-    # PHOTO POST
+    # PHOTO
     # =====================================================
 
     if post_type == "photo":
@@ -1226,10 +2069,7 @@ async def send_post_via_bot_api(
             payload["parse_mode"] = "HTML"
 
         if reply_markup:
-
-            payload["reply_markup"] = (
-                reply_markup
-            )
+            payload["reply_markup"] = reply_markup
 
         return await telegram_api_request(
             "sendPhoto",
@@ -1238,7 +2078,7 @@ async def send_post_via_bot_api(
 
 
     # =====================================================
-    # VIDEO POST
+    # VIDEO
     # =====================================================
 
     if post_type == "video":
@@ -1255,10 +2095,7 @@ async def send_post_via_bot_api(
             payload["parse_mode"] = "HTML"
 
         if reply_markup:
-
-            payload["reply_markup"] = (
-                reply_markup
-            )
+            payload["reply_markup"] = reply_markup
 
         return await telegram_api_request(
             "sendVideo",
@@ -1288,9 +2125,7 @@ async def post_preview(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(
-        user_id
-    )
+    session = POST_SESSIONS.get(user_id)
 
     if not session:
 
@@ -1308,31 +2143,47 @@ async def post_preview(
             session=session
         )
 
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "📤 Send Post",
+                    callback_data="post_send"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "➕ Add Button",
+                    callback_data="post_add_button"
+                )
+            ]
+        ]
+
+        if total_buttons(session) > 0:
+
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "✏️ Edit Buttons",
+                        callback_data="post_edit_buttons"
+                    )
+                ]
+            )
+
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "❌ Cancel",
+                    callback_data="post_cancel"
+                )
+            ]
+        )
+
         await callback.message.reply(
             "👆 **Post Preview**\n\n"
-
-            "Sahi hai to Send Post dabao.",
+            "Sahi hai to Send Post dabao.\n"
+            "Galti hai to Edit Buttons use karo.",
             reply_markup=InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "📤 Send Post",
-                            callback_data="post_send"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "➕ Add Button",
-                            callback_data="post_add_button"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "❌ Cancel",
-                            callback_data="post_cancel"
-                        )
-                    ]
-                ]
+                keyboard
             )
         )
 
@@ -1365,9 +2216,7 @@ async def post_send(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(
-        user_id
-    )
+    session = POST_SESSIONS.get(user_id)
 
     if not session:
 
@@ -1438,7 +2287,6 @@ async def post_cancel(
             )
 
         except Exception:
-
             pass
 
 
@@ -1466,5 +2314,4 @@ async def admin_close(
         await callback.message.delete()
 
     except Exception:
-
         pass
