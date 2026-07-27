@@ -374,15 +374,12 @@ def extract_button_custom_emoji(message: Message):
 
     for entity in entities:
 
-        # Pyrogram versions me entity.type enum/string
-        # representation different ho sakti hai.
         entity_type = getattr(entity, "type", None)
 
         type_name = ""
 
         if entity_type is not None:
 
-            # MessageEntityType.CUSTOM_EMOJI
             name = getattr(entity_type, "name", None)
 
             if name:
@@ -402,7 +399,6 @@ def extract_button_custom_emoji(message: Message):
         if emoji_id and custom_emoji_id is None:
             custom_emoji_id = str(emoji_id)
 
-        # Telegram offsets UTF-16 me hote hain
         start = utf16_to_python_index(
             original_text,
             entity.offset
@@ -417,7 +413,6 @@ def extract_button_custom_emoji(message: Message):
             (start, end)
         )
 
-    # Normal emoji / no custom emoji
     if not custom_ranges:
 
         return (
@@ -425,7 +420,6 @@ def extract_button_custom_emoji(message: Message):
             None
         )
 
-    # Premium emoji ka fallback character remove karo
     clean_text = original_text
 
     for start, end in sorted(
@@ -438,12 +432,10 @@ def extract_button_custom_emoji(message: Message):
             + clean_text[end:]
         )
 
-    # Extra spaces clean
     clean_text = " ".join(
         clean_text.split()
     )
 
-    # Telegram button text empty nahi ho sakta
     if not clean_text:
         clean_text = "\u2063"
 
@@ -722,71 +714,66 @@ async def post_creator_input(
         return
 
 
-# =====================================================
-# EDIT BUTTON NAME
-# =====================================================
+    # =====================================================
+    # EDIT BUTTON NAME
+    # =====================================================
 
-if step == "edit_name_input":
+    if step == "edit_name_input":
 
-    if not message.text:
+        if not message.text:
 
-        return await message.reply(
-            "❌ Button ka naam text me bhejo."
+            return await message.reply(
+                "❌ Button ka naam text me bhejo."
+            )
+
+        button = get_editing_button(session)
+
+        if not button:
+
+            session["step"] = "menu"
+
+            return await message.reply(
+                "❌ Button nahi mila.",
+                reply_markup=post_menu_keyboard(session)
+            )
+
+        (
+            button_text,
+            custom_emoji_id
+        ) = extract_button_custom_emoji(
+            message
         )
 
-    button = get_editing_button(session)
+        button["text"] = button_text
 
-    if not button:
-
-        session["step"] = "menu"
-
-        return await message.reply(
-            "❌ Button nahi mila.",
-            reply_markup=post_menu_keyboard(session)
+        button["icon_custom_emoji_id"] = (
+            custom_emoji_id
         )
 
-    # Fresh message se text + Premium emoji dobara detect karo
-    (
-        button_text,
-        custom_emoji_id
-    ) = extract_button_custom_emoji(
-        message
-    )
+        session["step"] = "edit_menu"
 
-    # Name completely replace
-    button["text"] = button_text
+        if custom_emoji_id:
 
-    # IMPORTANT:
-    # Purana custom emoji preserve nahi karna.
-    # Naye message me premium emoji hai to new ID,
-    # nahi hai to None.
-    button["icon_custom_emoji_id"] = (
-        custom_emoji_id
-    )
+            status_text = (
+                "✅ **Button name updated!**\n\n"
+                "✨ Premium/Custom emoji detected.\n"
+                "Premium emoji button icon me use hoga."
+            )
 
-    session["step"] = "edit_menu"
+        else:
 
-    if custom_emoji_id:
+            status_text = (
+                "✅ **Button name updated!**\n\n"
+                "🔘 Normal button text saved."
+            )
 
-        status_text = (
-            "✅ **Button name updated!**\n\n"
-            "✨ Premium/Custom emoji detected.\n"
-            "Premium emoji button icon me use hoga."
+        await message.reply(
+            status_text,
+            reply_markup=edit_button_menu()
         )
 
-    else:
+        return
 
-        status_text = (
-            "✅ **Button name updated!**\n\n"
-            "🔘 Normal button text saved."
-        )
-
-    await message.reply(
-        status_text,
-        reply_markup=edit_button_menu()
-    )
-
-    return
 
     # =====================================================
     # EDIT BUTTON URL
@@ -832,71 +819,72 @@ if step == "edit_name_input":
 
         return
 
-# =====================================================
-# EDIT BUTTON NAME
-# =====================================================
 
-if step == "edit_name_input":
+    # =====================================================
+    # TARGET
+    # =====================================================
 
-    if not message.text:
+    if step == "target":
 
-        return await message.reply(
-            "❌ Button ka naam text me bhejo."
-        )
+        if not message.text:
+            return
 
-    button = get_editing_button(session)
+        target = message.text.strip()
 
-    if not button:
+        if target.lower() == "me":
 
-        session["step"] = "menu"
+            chat_id = user_id
 
-        return await message.reply(
-            "❌ Button nahi mila.",
-            reply_markup=post_menu_keyboard(session)
-        )
+        else:
 
-    # Fresh message se text + Premium emoji dobara detect karo
-    (
-        button_text,
-        custom_emoji_id
-    ) = extract_button_custom_emoji(
-        message
-    )
+            try:
 
-    # Name completely replace
-    button["text"] = button_text
+                chat_id = int(target)
 
-    # IMPORTANT:
-    # Purana custom emoji preserve nahi karna.
-    # Naye message me premium emoji hai to new ID,
-    # nahi hai to None.
-    button["icon_custom_emoji_id"] = (
-        custom_emoji_id
-    )
+            except ValueError:
 
-    session["step"] = "edit_menu"
+                if target.startswith("@"):
+                    chat_id = target
 
-    if custom_emoji_id:
+                else:
 
-        status_text = (
-            "✅ **Button name updated!**\n\n"
-            "✨ Premium/Custom emoji detected.\n"
-            "Premium emoji button icon me use hoga."
-        )
+                    return await message.reply(
+                        "❌ Invalid Chat ID.\n\n"
+                        "Example:\n"
+                        "`-1001234567890`\n\n"
+                        "Public channel:\n"
+                        "`@channelusername`\n\n"
+                        "Ya `me` bhejo."
+                    )
 
-    else:
+        try:
 
-        status_text = (
-            "✅ **Button name updated!**\n\n"
-            "🔘 Normal button text saved."
-        )
+            await send_post_via_bot_api(
+                chat_id=chat_id,
+                session=session
+            )
 
-    await message.reply(
-        status_text,
-        reply_markup=edit_button_menu()
-    )
+            POST_SESSIONS.pop(
+                user_id,
+                None
+            )
 
-    return
+            await message.reply(
+                "✅ **Post successfully sent!**"
+            )
+
+        except Exception as e:
+
+            logger.exception(
+                "Post send failed"
+            )
+
+            await message.reply(
+                "❌ **Post send nahi hua.**\n\n"
+                f"`{e}`"
+            )
+
+        return
 
 
 # =========================================================
@@ -994,8 +982,6 @@ async def post_button_color(
         current_button["style"] = color
 
     await callback.answer()
-
-    # First button automatically first row
 
     if not session["button_rows"]:
 
@@ -1585,7 +1571,6 @@ async def post_move_previous(
         row_index
     ].pop(col_index)
 
-    # Put it in its own row above
     session["button_rows"].insert(
         row_index - 1,
         [button]
@@ -1643,7 +1628,6 @@ async def post_move_next(
 
     remove_empty_rows(session)
 
-    # Find position after original area
     new_index = min(
         row_index + 1,
         len(session["button_rows"])
@@ -1970,11 +1954,6 @@ def build_inline_keyboard(session):
                 "url": button["url"]
             }
 
-            # Telegram Bot API button style:
-            # primary = blue
-            # success = green
-            # danger  = red
-
             style = button.get(
                 "style"
             )
@@ -1982,8 +1961,6 @@ def build_inline_keyboard(session):
             if style:
 
                 button_data["style"] = style
-
-            # Premium Custom Emoji
 
             custom_emoji_id = button.get(
                 "icon_custom_emoji_id"
