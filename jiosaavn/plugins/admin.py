@@ -137,7 +137,10 @@ async def get_admin_panel_text(client: Bot):
     filters.command("admin")
     & filters.private
 )
-async def admin_panel(client: Bot, message: Message):
+async def admin_panel(
+    client: Bot,
+    message: Message
+):
 
     if not message.from_user:
         return
@@ -156,7 +159,9 @@ async def admin_panel(client: Bot, message: Message):
 
     except Exception as e:
 
-        logger.exception("Admin panel error")
+        logger.exception(
+            "Admin panel error"
+        )
 
         await message.reply(
             "❌ Admin panel error:\n"
@@ -171,9 +176,13 @@ async def admin_panel(client: Bot, message: Message):
 @Bot.on_callback_query(
     filters.regex(r"^admin_refresh$")
 )
-async def admin_refresh(client: Bot, callback: CallbackQuery):
+async def admin_refresh(
+    client: Bot,
+    callback: CallbackQuery
+):
 
     if not is_owner(callback.from_user.id):
+
         return await callback.answer(
             "Not allowed.",
             show_alert=True
@@ -188,11 +197,15 @@ async def admin_refresh(client: Bot, callback: CallbackQuery):
             reply_markup=admin_keyboard()
         )
 
-        await callback.answer("Updated ✅")
+        await callback.answer(
+            "Updated ✅"
+        )
 
     except Exception:
 
-        logger.exception("Stats refresh error")
+        logger.exception(
+            "Stats refresh error"
+        )
 
         await callback.answer(
             "Refresh failed.",
@@ -207,9 +220,13 @@ async def admin_refresh(client: Bot, callback: CallbackQuery):
 @Bot.on_callback_query(
     filters.regex(r"^admin_create_post$")
 )
-async def create_post(client: Bot, callback: CallbackQuery):
+async def create_post(
+    client: Bot,
+    callback: CallbackQuery
+):
 
     if not is_owner(callback.from_user.id):
+
         return await callback.answer(
             "Not allowed.",
             show_alert=True
@@ -220,17 +237,20 @@ async def create_post(client: Bot, callback: CallbackQuery):
     POST_SESSIONS[user_id] = {
         "step": "message",
 
-        # post
+        # Post data
         "type": None,
         "text": None,
         "file_id": None,
 
-        # keyboard
+        # Keyboard rows
+        #
         # Example:
+        #
         # [
-        #   [button1],
-        #   [button2, button3]
+        #     [button1],
+        #     [button2, button3]
         # ]
+        #
         "button_rows": [],
 
         "current_button": None
@@ -241,7 +261,7 @@ async def create_post(client: Bot, callback: CallbackQuery):
     await callback.message.edit_text(
         "📝 **AARTI POST CREATOR**\n\n"
 
-        "Ab post bhejo.\n\n"
+        "Ab apna post bhejo.\n\n"
 
         "Supported:\n"
         "📝 Text Message\n"
@@ -262,7 +282,10 @@ async def create_post(client: Bot, callback: CallbackQuery):
     filters.command("cancel")
     & filters.private
 )
-async def cancel_creator(client: Bot, message: Message):
+async def cancel_creator(
+    client: Bot,
+    message: Message
+):
 
     if not message.from_user:
         return
@@ -281,40 +304,142 @@ async def cancel_creator(client: Bot, message: Message):
 
 
 # =========================================================
-# GET CUSTOM EMOJI FROM BUTTON NAME
+# UTF-16 HELPERS
+# Telegram entity offsets are UTF-16 based
 # =========================================================
 
-def get_custom_emoji_id(message: Message):
+def utf16_to_python_index(
+    text: str,
+    utf16_offset: int
+) -> int:
 
-    try:
+    if utf16_offset <= 0:
+        return 0
 
-        entities = message.entities or []
+    current_offset = 0
 
-        for entity in entities:
+    for index, char in enumerate(text):
 
-            if str(entity.type).lower().endswith(
-                "custom_emoji"
-            ):
+        char_units = len(
+            char.encode("utf-16-le")
+        ) // 2
 
-                emoji_id = getattr(
-                    entity,
-                    "custom_emoji_id",
-                    None
-                )
+        if current_offset >= utf16_offset:
+            return index
 
-                if emoji_id:
-                    return str(emoji_id)
+        current_offset += char_units
 
-    except Exception:
-        logger.exception(
-            "Custom emoji detection failed"
+        if current_offset >= utf16_offset:
+            return index + 1
+
+    return len(text)
+
+
+# =========================================================
+# EXTRACT CUSTOM EMOJI
+# =========================================================
+
+def extract_button_custom_emoji(
+    message: Message
+):
+
+    original_text = message.text or ""
+
+    if not original_text:
+        return "", None
+
+    entities = message.entities or []
+
+    custom_entities = []
+
+    custom_emoji_id = None
+
+    for entity in entities:
+
+        entity_type = str(
+            entity.type
+        ).lower()
+
+        if "custom_emoji" not in entity_type:
+            continue
+
+        emoji_id = getattr(
+            entity,
+            "custom_emoji_id",
+            None
         )
 
-    return None
+        if (
+            emoji_id
+            and custom_emoji_id is None
+        ):
+            custom_emoji_id = str(
+                emoji_id
+            )
+
+        start = utf16_to_python_index(
+            original_text,
+            entity.offset
+        )
+
+        end = utf16_to_python_index(
+            original_text,
+            entity.offset + entity.length
+        )
+
+        custom_entities.append(
+            (start, end)
+        )
+
+    # -----------------------------------------
+    # No Premium emoji
+    # -----------------------------------------
+
+    if not custom_entities:
+
+        return (
+            original_text.strip(),
+            None
+        )
+
+    # -----------------------------------------
+    # Remove custom emoji fallback characters
+    # from actual button text.
+    #
+    # Telegram will render Premium emoji using
+    # icon_custom_emoji_id.
+    # -----------------------------------------
+
+    clean_text = original_text
+
+    for start, end in sorted(
+        custom_entities,
+        reverse=True
+    ):
+
+        clean_text = (
+            clean_text[:start]
+            + clean_text[end:]
+        )
+
+    # Remove double spaces
+    clean_text = " ".join(
+        clean_text.split()
+    )
+
+    # Telegram button still needs text
+    if not clean_text:
+
+        clean_text = "\u2063"
+
+    return (
+        clean_text,
+        custom_emoji_id
+    )
 
 
 # =========================================================
-# SAVE MEDIA/TEXT POST
+# POST INPUT HANDLER
 # =========================================================
 
 @Bot.on_message(
@@ -347,7 +472,9 @@ async def post_creator_input(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(user_id)
+    session = POST_SESSIONS.get(
+        user_id
+    )
 
     if not session:
         return
@@ -361,26 +488,51 @@ async def post_creator_input(
 
     if step == "message":
 
+        # -------------------------------
         # TEXT
+        # -------------------------------
+
         if message.text:
 
             session["type"] = "text"
-            session["text"] = message.text
+
+            session["text"] = (
+                message.text
+            )
+
             session["file_id"] = None
 
+        # -------------------------------
         # PHOTO
+        # -------------------------------
+
         elif message.photo:
 
             session["type"] = "photo"
-            session["text"] = message.caption or ""
-            session["file_id"] = message.photo.file_id
 
+            session["text"] = (
+                message.caption or ""
+            )
+
+            session["file_id"] = (
+                message.photo.file_id
+            )
+
+        # -------------------------------
         # VIDEO
+        # -------------------------------
+
         elif message.video:
 
             session["type"] = "video"
-            session["text"] = message.caption or ""
-            session["file_id"] = message.video.file_id
+
+            session["text"] = (
+                message.caption or ""
+            )
+
+            session["file_id"] = (
+                message.video.file_id
+            )
 
         else:
 
@@ -406,36 +558,55 @@ async def post_creator_input(
     if step == "button_name":
 
         if not message.text:
+
             return await message.reply(
                 "❌ Button ka naam text me bhejo."
             )
 
-        custom_emoji_id = get_custom_emoji_id(
+        # -----------------------------------------
+        # Detect Premium custom emoji and remove
+        # fallback emoji from button text.
+        # -----------------------------------------
+
+        (
+            button_text,
+            custom_emoji_id
+        ) = extract_button_custom_emoji(
             message
         )
 
         session["current_button"] = {
-            "text": message.text.strip(),
+            "text": button_text,
             "url": None,
             "style": None,
-            "icon_custom_emoji_id": custom_emoji_id
+            "icon_custom_emoji_id": (
+                custom_emoji_id
+            )
         }
 
         session["step"] = "button_url"
 
-        emoji_status = ""
-
         if custom_emoji_id:
-            emoji_status = (
-                "\n\n✨ Premium/Custom emoji detected!"
+
+            await message.reply(
+                "🔗 **Button URL bhejo**\n\n"
+
+                "✨ Premium/Custom emoji detected!\n\n"
+
+                "Premium emoji button ke icon me "
+                "automatically use hoga.\n\n"
+
+                "Example:\n"
+                "`https://t.me/yourchannel`"
             )
 
-        await message.reply(
-            "🔗 **Button URL bhejo**\n\n"
-            "Example:\n"
-            "`https://t.me/yourchannel`"
-            + emoji_status
-        )
+        else:
+
+            await message.reply(
+                "🔗 **Button URL bhejo**\n\n"
+                "Example:\n"
+                "`https://t.me/yourchannel`"
+            )
 
         return
 
@@ -459,6 +630,7 @@ async def post_creator_input(
 
             return await message.reply(
                 "❌ Invalid URL.\n\n"
+
                 "URL `https://`, `http://` "
                 "ya `tg://` se start honi chahiye."
             )
@@ -468,7 +640,10 @@ async def post_creator_input(
         )
 
         if not current_button:
-            return
+
+            return await message.reply(
+                "❌ Button data missing."
+            )
 
         current_button["url"] = url
 
@@ -481,21 +656,29 @@ async def post_creator_input(
                     [
                         InlineKeyboardButton(
                             "🔵 Blue",
-                            callback_data="post_color_primary"
+                            callback_data=(
+                                "post_color_primary"
+                            )
                         ),
                         InlineKeyboardButton(
                             "🟢 Green",
-                            callback_data="post_color_success"
+                            callback_data=(
+                                "post_color_success"
+                            )
                         )
                     ],
                     [
                         InlineKeyboardButton(
                             "🔴 Red",
-                            callback_data="post_color_danger"
+                            callback_data=(
+                                "post_color_danger"
+                            )
                         ),
                         InlineKeyboardButton(
                             "⚪ Normal",
-                            callback_data="post_color_default"
+                            callback_data=(
+                                "post_color_default"
+                            )
                         )
                     ]
                 ]
@@ -523,22 +706,29 @@ async def post_creator_input(
         else:
 
             try:
-                chat_id = int(target)
+
+                chat_id = int(
+                    target
+                )
 
             except ValueError:
 
-                # username support
                 if target.startswith("@"):
+
                     chat_id = target
 
                 else:
+
                     return await message.reply(
                         "❌ Invalid Chat ID.\n\n"
+
                         "Example:\n"
                         "`-1001234567890`\n\n"
-                        "Ya:\n"
+
+                        "Public channel:\n"
                         "`@channelusername`\n\n"
-                        "Khud ko bhejne ke liye `me`."
+
+                        "Ya `me` bhejo."
                     )
 
         try:
@@ -588,7 +778,9 @@ async def post_add_button(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(user_id)
+    session = POST_SESSIONS.get(
+        user_id
+    )
 
     if not session:
 
@@ -601,15 +793,27 @@ async def post_add_button(
 
     await callback.answer()
 
-    await callback.message.edit_text(
-        "🔘 **Button ka naam bhejo**\n\n"
+    try:
 
-        "Normal emoji ya Telegram Premium "
-        "custom emoji bhi use kar sakte ho.\n\n"
+        await callback.message.edit_text(
+            "🔘 **Button ka naam bhejo**\n\n"
 
-        "Example:\n"
-        "`Clon Tools ⚡`"
-    )
+            "Normal emoji ya Telegram Premium "
+            "custom emoji bhi use kar sakte ho.\n\n"
+
+            "Premium emoji detect hone par uska "
+            "normal duplicate automatically remove "
+            "ho jayega.\n\n"
+
+            "Example:\n"
+            "`Clon Tools ⚡`"
+        )
+
+    except Exception:
+
+        await callback.message.reply(
+            "🔘 **Button ka naam bhejo**"
+        )
 
 
 # =========================================================
@@ -629,7 +833,9 @@ async def post_button_color(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(user_id)
+    session = POST_SESSIONS.get(
+        user_id
+    )
 
     if not session:
 
@@ -655,16 +861,22 @@ async def post_button_color(
     )
 
     if color == "default":
+
         current_button["style"] = None
 
     else:
+
         current_button["style"] = color
 
     session["step"] = "button_layout"
 
     await callback.answer()
 
-    # First button
+    # =====================================================
+    # FIRST BUTTON
+    # First button automatically gets first row.
+    # =====================================================
+
     if not session["button_rows"]:
 
         session["button_rows"].append(
@@ -672,24 +884,31 @@ async def post_button_color(
         )
 
         session["current_button"] = None
+
         session["step"] = "menu"
 
         await callback.message.edit_text(
             "✅ **Button Added!**\n\n"
+
             "📐 Row: `1`\n"
             "🔘 Position: `1`\n\n"
+
             "Ab kya karna hai?",
             reply_markup=post_menu_keyboard()
         )
 
         return
 
-    # Other buttons
+
+    # =====================================================
+    # ASK ROW POSITION
+    # =====================================================
+
     await callback.message.edit_text(
         "📐 **Button kaha rakhna hai?**\n\n"
 
         "🆕 **New Row**\n"
-        "Button alag full-width line me aayega.\n\n"
+        "Button alag line me aayega.\n\n"
 
         "↔️ **Same Row**\n"
         "Pichle button ke saath same line me aayega.",
@@ -729,7 +948,9 @@ async def post_button_layout(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(user_id)
+    session = POST_SESSIONS.get(
+        user_id
+    )
 
     if not session:
 
@@ -756,6 +977,11 @@ async def post_button_layout(
 
     rows = session["button_rows"]
 
+
+    # =====================================================
+    # SAME ROW
+    # =====================================================
+
     if layout == "same":
 
         if not rows:
@@ -766,8 +992,9 @@ async def post_button_layout(
 
         else:
 
-            # Keep max 2 buttons in one row
-            # for cleaner layout
+            # Max 2 buttons per row
+            # keeps Telegram keyboard clean.
+
             if len(rows[-1]) >= 2:
 
                 rows.append(
@@ -780,13 +1007,20 @@ async def post_button_layout(
                     current_button
                 )
 
+
+    # =====================================================
+    # NEW ROW
+    # =====================================================
+
     else:
 
         rows.append(
             [current_button]
         )
 
+
     session["current_button"] = None
+
     session["step"] = "menu"
 
     total_buttons = sum(
@@ -810,10 +1044,12 @@ async def post_button_layout(
 
 
 # =========================================================
-# BUILD RAW INLINE KEYBOARD
+# BUILD INLINE KEYBOARD
 # =========================================================
 
-def build_inline_keyboard(session):
+def build_inline_keyboard(
+    session
+):
 
     inline_keyboard = []
 
@@ -831,10 +1067,25 @@ def build_inline_keyboard(session):
                 "url": button["url"]
             }
 
-            style = button.get("style")
+            # -----------------------------------------
+            # BUTTON COLOR
+            # primary = blue
+            # success = green
+            # danger  = red
+            # -----------------------------------------
+
+            style = button.get(
+                "style"
+            )
 
             if style:
+
                 button_data["style"] = style
+
+
+            # -----------------------------------------
+            # PREMIUM CUSTOM EMOJI ICON
+            # -----------------------------------------
 
             custom_emoji_id = button.get(
                 "icon_custom_emoji_id"
@@ -851,6 +1102,7 @@ def build_inline_keyboard(session):
             )
 
         if api_row:
+
             inline_keyboard.append(
                 api_row
             )
@@ -859,7 +1111,7 @@ def build_inline_keyboard(session):
 
 
 # =========================================================
-# RAW TELEGRAM BOT API REQUEST
+# TELEGRAM RAW API REQUEST
 # =========================================================
 
 async def telegram_api_request(
@@ -894,7 +1146,7 @@ async def telegram_api_request(
 
 
 # =========================================================
-# SEND POST
+# SEND POST VIA BOT API
 # =========================================================
 
 async def send_post_via_bot_api(
@@ -902,12 +1154,23 @@ async def send_post_via_bot_api(
     session
 ):
 
-    post_type = session.get("type")
-    text = session.get("text") or ""
-    file_id = session.get("file_id")
+    post_type = session.get(
+        "type"
+    )
 
-    inline_keyboard = build_inline_keyboard(
-        session
+    text = (
+        session.get("text")
+        or ""
+    )
+
+    file_id = session.get(
+        "file_id"
+    )
+
+    inline_keyboard = (
+        build_inline_keyboard(
+            session
+        )
     )
 
     reply_markup = None
@@ -920,7 +1183,7 @@ async def send_post_via_bot_api(
 
 
     # =====================================================
-    # TEXT
+    # TEXT POST
     # =====================================================
 
     if post_type == "text":
@@ -935,7 +1198,10 @@ async def send_post_via_bot_api(
         }
 
         if reply_markup:
-            payload["reply_markup"] = reply_markup
+
+            payload["reply_markup"] = (
+                reply_markup
+            )
 
         return await telegram_api_request(
             "sendMessage",
@@ -944,7 +1210,7 @@ async def send_post_via_bot_api(
 
 
     # =====================================================
-    # PHOTO
+    # PHOTO POST
     # =====================================================
 
     if post_type == "photo":
@@ -960,7 +1226,10 @@ async def send_post_via_bot_api(
             payload["parse_mode"] = "HTML"
 
         if reply_markup:
-            payload["reply_markup"] = reply_markup
+
+            payload["reply_markup"] = (
+                reply_markup
+            )
 
         return await telegram_api_request(
             "sendPhoto",
@@ -969,7 +1238,7 @@ async def send_post_via_bot_api(
 
 
     # =====================================================
-    # VIDEO
+    # VIDEO POST
     # =====================================================
 
     if post_type == "video":
@@ -986,12 +1255,16 @@ async def send_post_via_bot_api(
             payload["parse_mode"] = "HTML"
 
         if reply_markup:
-            payload["reply_markup"] = reply_markup
+
+            payload["reply_markup"] = (
+                reply_markup
+            )
 
         return await telegram_api_request(
             "sendVideo",
             payload
         )
+
 
     raise RuntimeError(
         "Unknown post type."
@@ -1015,7 +1288,9 @@ async def post_preview(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(user_id)
+    session = POST_SESSIONS.get(
+        user_id
+    )
 
     if not session:
 
@@ -1035,6 +1310,7 @@ async def post_preview(
 
         await callback.message.reply(
             "👆 **Post Preview**\n\n"
+
             "Sahi hai to Send Post dabao.",
             reply_markup=InlineKeyboardMarkup(
                 [
@@ -1073,7 +1349,7 @@ async def post_preview(
 
 
 # =========================================================
-# SEND POST CALLBACK
+# SEND POST
 # =========================================================
 
 @Bot.on_callback_query(
@@ -1089,7 +1365,9 @@ async def post_send(
     if not is_owner(user_id):
         return
 
-    session = POST_SESSIONS.get(user_id)
+    session = POST_SESSIONS.get(
+        user_id
+    )
 
     if not session:
 
@@ -1115,7 +1393,7 @@ async def post_send(
         "`me`\n\n"
 
         "⚠️ Channel/Group me bot ke paas "
-        "required permission honi chahiye."
+        "required permissions honi chahiye."
     )
 
 
@@ -1153,9 +1431,15 @@ async def post_cancel(
 
     except Exception:
 
-        await callback.message.reply(
-            "❌ **Post Creator Cancelled.**"
-        )
+        try:
+
+            await callback.message.reply(
+                "❌ **Post Creator Cancelled.**"
+            )
+
+        except Exception:
+
+            pass
 
 
 # =========================================================
@@ -1178,7 +1462,9 @@ async def admin_close(
     await callback.answer()
 
     try:
+
         await callback.message.delete()
 
     except Exception:
+
         pass
