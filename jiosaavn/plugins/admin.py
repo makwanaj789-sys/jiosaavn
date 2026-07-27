@@ -832,72 +832,71 @@ if step == "edit_name_input":
 
         return
 
+# =====================================================
+# EDIT BUTTON NAME
+# =====================================================
 
-    # =====================================================
-    # TARGET
-    # =====================================================
+if step == "edit_name_input":
 
-    if step == "target":
+    if not message.text:
 
-        if not message.text:
-            return
+        return await message.reply(
+            "❌ Button ka naam text me bhejo."
+        )
 
-        target = message.text.strip()
+    button = get_editing_button(session)
 
-        if target.lower() == "me":
+    if not button:
 
-            chat_id = user_id
+        session["step"] = "menu"
 
-        else:
+        return await message.reply(
+            "❌ Button nahi mila.",
+            reply_markup=post_menu_keyboard(session)
+        )
 
-            try:
+    # Fresh message se text + Premium emoji dobara detect karo
+    (
+        button_text,
+        custom_emoji_id
+    ) = extract_button_custom_emoji(
+        message
+    )
 
-                chat_id = int(target)
+    # Name completely replace
+    button["text"] = button_text
 
-            except ValueError:
+    # IMPORTANT:
+    # Purana custom emoji preserve nahi karna.
+    # Naye message me premium emoji hai to new ID,
+    # nahi hai to None.
+    button["icon_custom_emoji_id"] = (
+        custom_emoji_id
+    )
 
-                if target.startswith("@"):
-                    chat_id = target
+    session["step"] = "edit_menu"
 
-                else:
+    if custom_emoji_id:
 
-                    return await message.reply(
-                        "❌ Invalid Chat ID.\n\n"
-                        "Example:\n"
-                        "`-1001234567890`\n\n"
-                        "Public channel:\n"
-                        "`@channelusername`\n\n"
-                        "Ya `me` bhejo."
-                    )
+        status_text = (
+            "✅ **Button name updated!**\n\n"
+            "✨ Premium/Custom emoji detected.\n"
+            "Premium emoji button icon me use hoga."
+        )
 
-        try:
+    else:
 
-            await send_post_via_bot_api(
-                chat_id=chat_id,
-                session=session
-            )
+        status_text = (
+            "✅ **Button name updated!**\n\n"
+            "🔘 Normal button text saved."
+        )
 
-            POST_SESSIONS.pop(
-                user_id,
-                None
-            )
+    await message.reply(
+        status_text,
+        reply_markup=edit_button_menu()
+    )
 
-            await message.reply(
-                "✅ **Post successfully sent!**"
-            )
-
-        except Exception as e:
-
-            logger.exception(
-                "Post send failed"
-            )
-
-            await message.reply(
-                "❌ **Post send nahi hua.**\n\n"
-                f"`{e}`"
-            )
-
-        return
+    return
 
 
 # =========================================================
