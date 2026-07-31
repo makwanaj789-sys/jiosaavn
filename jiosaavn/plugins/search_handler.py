@@ -1,5 +1,3 @@
-# search_handler.py - Modified version with YouTube support
-
 import html
 import logging
 import traceback
@@ -351,7 +349,7 @@ async def search(
             
             response = await engine.search(
                 query=query,
-                source="youtube",  # YouTube first
+                source="youtube",
                 search_type=search_type,
                 page_no=page_no
             )
@@ -361,21 +359,18 @@ async def search(
             
             if isinstance(response, dict):
                 if search_type in ("all", "topquery"):
-                    # For "all" search, check songs data
                     songs_data = safe_list(
                         response.get("songs", {}).get("data", [])
                     )
                     if songs_data:
                         has_results = True
                 else:
-                    # For specific search types
                     results_data = safe_list(
                         response.get("results", [])
                     )
                     if results_data:
                         has_results = True
                     else:
-                        # Also check if results is nested
                         for key in response:
                             if key not in ["total", "position"]:
                                 data = safe_list(
@@ -642,7 +637,6 @@ async def search(
                     ):
                         continue
 
-                    # Skip total and position keys
                     if result_type in ["total", "position"]:
                         continue
 
@@ -725,9 +719,26 @@ async def search(
 
         else:
 
-            # Get results from response
+            total_results = (
+                response.get("total")
+                or 0
+            )
+
+            try:
+
+                total_results = int(
+                    total_results
+                )
+
+            except (
+                ValueError,
+                TypeError
+            ):
+
+                total_results = 0
+
             results = safe_list(
-                response.get("results", [])
+                response.get("results")
             )
             
             # If no results, try to get from nested structure
@@ -740,14 +751,6 @@ async def search(
                         if nested_data:
                             results = nested_data
                             break
-
-            total_results = len(results)
-            
-            if response.get("total"):
-                try:
-                    total_results = int(response.get("total"))
-                except (ValueError, TypeError):
-                    pass
 
             for result in results:
 
@@ -768,7 +771,6 @@ async def search(
                     ""
                 )
 
-                # If perma_url not found, try url
                 if not perma_url:
                     perma_url = safe_text(
                         result.get(
@@ -810,7 +812,7 @@ async def search(
                     result.get(
                         "type"
                     ),
-                    "song"  # Default to song for YouTube
+                    "song"
                 ).lower()
 
                 # =========================================
@@ -824,7 +826,6 @@ async def search(
                     "Unknown"
                 )
 
-                # If no name, try artist or uploader
                 if artist == "Unknown":
                     artist = safe_text(
                         result.get(
@@ -857,7 +858,6 @@ async def search(
                     ""
                 )
 
-                # If no album, use artist name
                 if not album and artist != "Unknown":
                     album = artist
 
@@ -894,15 +894,45 @@ async def search(
                 )
 
                 if not button_label:
-                    # Default to song type
                     button_label = f"🎙 {title}"
+
+                # =========================================
+                # ⭐ DETERMINE SOURCE FOR CALLBACK
+                # =========================================
+
+                is_youtube = False
+                
+                # Check 1: Source field
+                if result.get("source") == "youtube":
+                    is_youtube = True
+                
+                # Check 2: URL contains youtube
+                elif "youtube.com" in perma_url or "youtu.be" in perma_url:
+                    is_youtube = True
+                
+                # Check 3: URL field contains youtube
+                elif "youtube.com" in result.get("url", "") or "youtu.be" in result.get("url", ""):
+                    is_youtube = True
+                
+                # Check 4: Video ID format (11 alphanumeric characters)
+                elif len(item_id) == 11 and item_id.isalnum():
+                    if result.get("source") != "jiosaavn":
+                        is_youtube = True
+
+                # Set callback type
+                if is_youtube:
+                    callback_type = "youtube"
+                    logger.info(f"🎯 YouTube detected: {title} -> {item_id}")
+                else:
+                    callback_type = result_type
+                    logger.info(f"🎯 JioSaavn detected: {title} -> {item_id}")
 
                 buttons.append(
                     [
                         InlineKeyboardButton(
                             text=button_label,
                             callback_data=(
-                                f"{result_type}#"
+                                f"{callback_type}#"
                                 f"{item_id}"
                             )
                         )
