@@ -6,7 +6,7 @@ import yt_dlp
 
 executor = ThreadPoolExecutor(max_workers=2)
 
-# COOKIES FIX: Ye naya function cookies ko env se utha kar temp file banayega
+# COOKIES FIX: Temp file banane ka function
 def _get_cookies_path():
     cookies_content = os.environ.get('YOUTUBE_COOKIES')
     if not cookies_content:
@@ -18,8 +18,8 @@ def _get_cookies_path():
     except Exception:
         return None
 
-# MAIN SEARCH FUNCTION (Aapka original search logic, bas cookies fix add kiya)
-async def search(query: str, limit: int = 10):
+# ⭐ YEH HAI WO FUNCTION JO provider.py IMPORT KAR RAHA HAI
+async def download_video(url: str):
     cookies_path = _get_cookies_path()
     
     ydl_opts = {
@@ -27,7 +27,7 @@ async def search(query: str, limit: int = 10):
         'outtmpl': '%(title)s.%(ext)s',
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': cookies_path,  # <--- YAHAN COOKIES PASS KI
+        'cookiefile': cookies_path,  # <--- COOKIES PASS KI
         'headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
         }
@@ -37,7 +37,7 @@ async def search(query: str, limit: int = 10):
         loop = asyncio.get_running_loop()
         def sync_search():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(query, download=False)
+                info = ydl.extract_info(url, download=False)
                 return info
         
         info = await loop.run_in_executor(executor, sync_search)
@@ -62,10 +62,9 @@ async def search(query: str, limit: int = 10):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# GET INFO
+# GET INFO (Provider isko call karega)
 async def get_info(item_id: str):
     url = f"https://www.youtube.com/watch?v={item_id}"
-    # Same yt-dlp logic (shortened for brevity)
     cookies_path = _get_cookies_path()
     ydl_opts = {'quiet': True, 'cookiefile': cookies_path}
     try:
@@ -78,7 +77,7 @@ async def get_info(item_id: str):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-# DOWNLOAD SONG
+# DOWNLOAD SONG (Provider isko call karega)
 async def download_song(video_id: str, bitrate: int = 320, download_location: str = None):
     url = f"https://www.youtube.com/watch?v={video_id}"
     cookies_path = _get_cookies_path()
@@ -87,7 +86,7 @@ async def download_song(video_id: str, bitrate: int = 320, download_location: st
         'outtmpl': f'{download_location or ""}%(title)s.%(ext)s',
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': cookies_path,  # <--- YAHAN BHI COOKIES PASS KI
+        'cookiefile': cookies_path,
     }
     try:
         loop = asyncio.get_running_loop()
