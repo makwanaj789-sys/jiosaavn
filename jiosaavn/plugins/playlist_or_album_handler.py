@@ -2,7 +2,7 @@ import html
 import logging
 import traceback
 
-from api.jiosaavn import Jiosaavn
+from api.search_engine import SearchEngine
 from jiosaavn.bot import Bot
 
 from humanfriendly import format_timespan
@@ -24,7 +24,7 @@ async def playlist_or_album(client: Bot, callback: CallbackQuery):
     playlist_id = item_id if search_type == "playlist" else None
     
     try:
-        response = await Jiosaavn().get_playlist_or_album(album_id=album_id, playlist_id=playlist_id, page_no=page_no)
+        response = await SearchEngine().get_playlist_or_album(album_id=album_id, playlist_id=playlist_id, page_no=page_no)
         if not response or not response.get("list"):
             return await callback.message.edit(f"**The requested {search_type} could not be found.**")
     except RuntimeError as e:
