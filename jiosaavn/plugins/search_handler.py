@@ -337,11 +337,16 @@ async def search(
                 )
 
         # =================================================
+        # 🛑 FIX: INITIALIZE ENGINE BEFORE TRY BLOCK
+        # =================================================
+        engine = None
+        response = None
+
+        # =================================================
         # SEARCH ENGINE - YOUTUBE FIRST
         # =================================================
 
         try:
-
             engine = SearchEngine()
 
             # Try YouTube search first
@@ -387,6 +392,7 @@ async def search(
             if not has_results:
                 logger.info(f"No YouTube results for '{query}'. Falling back to JioSaavn.")
                 
+                engine = SearchEngine()  # Re-initialize if needed, but safe to reuse
                 response = await engine.search(
                     query=query,
                     source="jiosaavn",
@@ -400,6 +406,7 @@ async def search(
             # Try JioSaavn as fallback
             try:
                 logger.info(f"Falling back to JioSaavn for '{query}'")
+                engine = SearchEngine()  # Ensure engine is defined for fallback
                 response = await engine.search(
                     query=query,
                     source="jiosaavn",
