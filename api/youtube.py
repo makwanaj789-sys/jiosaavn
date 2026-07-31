@@ -43,7 +43,7 @@ async def download_video(query: str):
           }
         },
         'format_sort': ['hasaud'],
-        'listformats': True,
+        'listformats': False,
         'outtmpl': '%(title)s.%(ext)s',
         'quiet': False,
         'no_warnings': True,
