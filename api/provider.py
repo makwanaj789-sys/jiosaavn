@@ -1,176 +1,160 @@
-import os
-import tempfile
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import yt_dlp
+import logging
+from typing import Any, Dict, Optional
 
-# Thread pool for async execution
-executor = ThreadPoolExecutor(max_workers=2)
+# Ye import tab tak kaam karega jab tak aapke paas file exist karti hai
+from api.jiosaavn import Jiosaavn
+from api.youtube import search as youtube_search
+from api.youtube import get_info as youtube_info
+from api.youtube import download_song as youtube_download
 
-# =========================================================
-# HELPER: GET COOKIES
-# =========================================================
+logger = logging.getLogger(__name__)
 
-def _get_cookies_path():
-    """Reads YOUTUBE_COOKIES env var and returns a temp file path."""
-    cookies_content = os.environ.get('YOUTUBE_COOKIES')
-    if not cookies_content:
-        return None
+class Provider:
 
-    try:
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as f:
-            f.write(cookies_content)
-            return f.name
-    except Exception as e:
-        print(f"⚠️ Error creating cookies file: {e}")
-        return None
-
-# =========================================================
-# CORE YT-DLP EXECUTOR
-# =========================================================
-
-async def _run_ytdl(url: str, download: bool = True, extract_flat: bool = False):
-    """Internal function to run yt-dlp asynchronously."""
-    cookies_path = _get_cookies_path()
-    
-    ydl_opts = {
-        'format': 'bestaudio/best',  # Audio focus (you can change to bestvideo+bestaudio if needed)
-        'outtmpl': '%(title)s.%(ext)s',
-        'quiet': True,
-        'no_warnings': True,
-        'cookiefile': cookies_path,
-        'headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
-        },
-        'extract_flat': extract_flat
-    }
-
-    try:
-        loop = asyncio.get_running_loop()
+    def __init__(self):
+        # JioSaavn initialize kar rahe hain
+        self.jiosaavn = Jiosaavn()
         
-        def sync_download():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(url, download=download)
+        # YouTube ke functions ko assign kar rahe hain
+        self.youtube_search = youtube_search
+        self.youtube_info = youtube_info
+        self.youtube_download = youtube_download
 
-        info = await loop.run_in_executor(executor, sync_download)
-        return info, None
+    # =====================================
+    # SEARCH
+    # =====================================
 
-    except Exception as e:
-        return None, str(e)
-    
-    finally:
-        if cookies_path and os.path.exists(cookies_path):
-            try:
-                os.remove(cookies_path)
-            except:
-                pass
+    async def search(
+        self,
+        query: str,
+        source: str = "jiosaavn",
+        search_type: str = "songs",
+        page_no: int = 1,
+        page_size: int = 10
+    ) -> Any:
 
-# =========================================================
-# 1. SEARCH FUNCTION (Provider calls this)
-# =========================================================
+        if source == "youtube":
+            return await self.youtube_search(
+                query=query,
+                limit=page_size
+            )
 
-async def search(query: str, limit: int = 10):
-    """
-    Searches and downloads the video/audio from the URL.
-    Returns a format compatible with Provider.search()
-    """
-    info, error = await _run_ytdl(query, download=True, extract_flat=False)
-    
-    if error:
-        return {
-            "success": False,
-            "error": error
-        }
+        return await self.jiosaavn.search(
+            query=query,
+            search_type=search_type,
+            page_no=page_no,
+            page_size=page_size
+        )
 
-    if not info:
-        return {
-            "success": False,
-            "error": "No information retrieved from YouTube."
-        }
+    # =====================================
+    # SEARCH ALL TYPES
+    # =====================================
 
-    # Format the response to match what provider expects
-    return {
-        "success": True,
-        "results": [{
-            "id": info.get('id'),
-            "title": info.get('title'),
-            "duration": info.get('duration'),
-            "uploader": info.get('uploader'),
-            "url": info.get('webpage_url'),
-            "source": "youtube"
-        }],
-        "total": 1
-    }
+    async def search_all(
+        self,
+        query: str,
+        source: str = "jiosaavn"
+    ) -> Any:
 
-# =========================================================
-# 2. GET INFO FUNCTION (Provider calls this)
-# =========================================================
+        if source == "youtube":
+            return await self.youtube_search(
+                query=query,
+                limit=10
+            )
 
-async def get_info(item_id: str):
-    """
-    Fetches metadata without downloading the file.
-    """
-    url = f"https://www.youtube.com/watch?v={item_id}"
-    info, error = await _run_ytdl(url, download=False, extract_flat=False)
-    
-    if error or not info:
-        return {"success": False, "error": error or "Failed to fetch info"}
+        return await self.jiosaavn.search_all_types(
+            query=query
+        )
 
-    return {
-        "success": True,
-        "data": {
-            "id": info.get('id'),
-            "title": info.get('title'),
-            "duration": info.get('duration'),
-            "uploader": info.get('uploader'),
-            "thumbnail": info.get('thumbnail'),
-            "url": info.get('webpage_url')
-        }
-    }
+    # =====================================
+    # SONG DETAILS
+    # =====================================
 
-# =========================================================
-# 3. DOWNLOAD SONG FUNCTION (Provider calls this)
-# =========================================================
+    async def get_song(
+        self,
+        item_id: str,
+        source: str = "jiosaavn"
+    ) -> Optional[Dict]:
 
-async def download_song(video_id: str, bitrate: int = 320, download_location: str = None):
-    """
-    Directly downloads the song (audio) and returns the file path.
-    """
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    
-    # Override options for pure audio download
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': f'{download_location or ""}%(title)s.%(ext)s',
-        'quiet': True,
-        'no_warnings': True,
-        'cookiefile': _get_cookies_path(),
-        'headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
-        }
-    }
+        if source == "youtube":
+            return await self.youtube_info(
+                item_id
+            )
 
-    try:
-        loop = asyncio.get_running_loop()
-        
-        def sync_download():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(url, download=True)
+        return await self.jiosaavn.get_song(
+            item_id
+        )
 
-        info = await loop.run_in_executor(executor, sync_download)
-        
-        if not info:
-            return {"success": False, "error": "Download failed"}
+    # =====================================
+    # ALBUM / PLAYLIST
+    # =====================================
 
-        # Get the downloaded file path
-        requested_downloads = info.get('requested_downloads', [])
-        filepath = requested_downloads[0].get('filepath') if requested_downloads else None
+    async def get_playlist_or_album(
+        self,
+        album_id: str = None,
+        playlist_id: str = None,
+        page_no: int = 1,
+        page_size: int = 10
+    ):
 
-        return {
-            "success": True,
-            "filepath": filepath,
-            "title": info.get('title')
-        }
+        return await self.jiosaavn.get_playlist_or_album(
+            album_id=album_id,
+            playlist_id=playlist_id,
+            page_no=page_no,
+            page_size=page_size
+        )
 
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    # =====================================
+    # ARTIST
+    # =====================================
+
+    async def get_artist(
+        self,
+        artist_id: str,
+        page_no: int = 1,
+        page_size: int = 10
+    ):
+
+        return await self.jiosaavn.get_artist(
+            artist_id=artist_id,
+            page_no=page_no,
+            page_size=page_size
+        )
+
+    # =====================================
+    # LYRICS
+    # =====================================
+
+    async def get_lyrics(
+        self,
+        lyrics_id: str
+    ):
+
+        return await self.jiosaavn.get_song_lyrics(
+            lyrics_id
+        )
+
+    # =====================================
+    # ⭐ DOWNLOAD
+    # =====================================
+
+    async def download_song(
+        self,
+        item_id: str,
+        source: str = "jiosaavn",
+        bitrate: int = 320,
+        download_location: str = None
+    ):
+
+        if source == "youtube":
+            return await self.youtube_download(
+                video_id=item_id,
+                bitrate=bitrate,
+                download_location=download_location
+            )
+
+        return await self.jiosaavn.download_song(
+            song_id=item_id,
+            bitrate=bitrate,
+            download_location=download_location
+        )
