@@ -54,7 +54,7 @@ async def download_callback(client: Bot, message: CallbackQuery):
             performer="YouTube"
         )
 
-        await message.delete()
+        await message.message.delete()
 
         # File cleanup (optional - agar aap chahe toh)
         # import os
