@@ -13,7 +13,7 @@ class Provider:
 
     def __init__(self):
         self.jiosaavn = Jiosaavn()
-        self.youtube = download_video()
+        self.youtube = download_video
 
     # =====================================
     # SEARCH
