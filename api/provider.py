@@ -1,3 +1,5 @@
+# api/provider.py
+
 import logging
 from typing import Any, Dict, Optional
 
@@ -131,7 +133,7 @@ class Provider:
         )
 
     # =====================================
-    # DOWNLOAD
+    # ⭐ DOWNLOAD - UPDATED
     # =====================================
 
     async def download_song(
@@ -143,9 +145,10 @@ class Provider:
     ):
 
         if source == "youtube":
-
-            raise NotImplementedError(
-                "YouTube downloader not implemented yet."
+            return await self.youtube.download_song(
+                video_id=item_id,
+                bitrate=bitrate,
+                download_location=download_location
             )
 
         return await self.jiosaavn.download_song(
