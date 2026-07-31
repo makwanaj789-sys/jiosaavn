@@ -36,12 +36,14 @@ async def download_video(query: str):
         download = True
     
     ydl_opts = {
-        'format': 'bestaudio/best',
+        'format': 'bestaudio',
+        'format_sort': ['hasaud', 'quality'],
         'outtmpl': '%(title)s.%(ext)s',
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookies_path,
         'extract_flat': not download,
+        'noplaylist': True,
         'headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
