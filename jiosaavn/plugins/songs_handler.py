@@ -1,5 +1,6 @@
 # songs_handler.py
 
+import os
 import logging
 import traceback
 
@@ -30,10 +31,8 @@ async def handle_song_callback(
     logger.info(f"📥 Callback received: {callback_query.data}")
     
     try:
-        # Answer callback
         await callback_query.answer()
         
-        # Parse callback data
         data_parts = callback_query.data.split("#")
         
         if len(data_parts) < 2:
@@ -46,17 +45,11 @@ async def handle_song_callback(
         
         logger.info(f"📌 Type: {callback_type}, ID: {item_id}")
         
-        # Show loading
         await callback_query.message.edit_text(
             "__**Loading... ⏳**__"
         )
         
-        # Initialize search engine
         engine = SearchEngine()
-        
-        # =============================================
-        # HANDLE DIFFERENT TYPES
-        # =============================================
         
         try:
             if callback_type == "youtube":
@@ -105,7 +98,6 @@ async def handle_youtube_song(callback_query, engine, video_id):
     """Handle YouTube song selection."""
     
     try:
-        # Get YouTube video info
         song_data = await engine.get_song(
             item_id=video_id,
             source="youtube"
@@ -116,13 +108,9 @@ async def handle_youtube_song(callback_query, engine, video_id):
                 "❌ This YouTube video could not be found."
             )
         
-        # Format song data
         formatted = format_youtube_song(song_data)
-        
-        # Create message
         text = create_song_text(formatted, is_youtube=True)
         
-        # Create buttons
         buttons = [
             [
                 InlineKeyboardButton(
@@ -163,7 +151,6 @@ async def handle_jiosaavn_song(callback_query, engine, song_id):
     """Handle JioSaavn song selection."""
     
     try:
-        # Get JioSaavn song info
         song_data = await engine.get_song(
             item_id=song_id,
             source="jiosaavn"
@@ -174,13 +161,9 @@ async def handle_jiosaavn_song(callback_query, engine, song_id):
                 "❌ This song could not be found."
             )
         
-        # Format song data
         formatted = format_jiosaavn_song(song_data)
-        
-        # Create message
         text = create_song_text(formatted, is_youtube=False)
         
-        # Create buttons
         buttons = [
             [
                 InlineKeyboardButton(
@@ -469,11 +452,11 @@ async def close_callback(client, callback_query):
 
 
 # =========================================================
-# DOWNLOAD HANDLER
+# ⭐ DOWNLOAD HANDLER
 # =========================================================
 
 @Bot.on_callback_query(filters.regex(r"^download#"))
-async def download_callback(client, callback_query):
+async def download_callback(client: Bot, callback_query: CallbackQuery):
     """Handle download button."""
     
     try:
@@ -481,17 +464,79 @@ async def download_callback(client, callback_query):
         
         data_parts = callback_query.data.split("#")
         if len(data_parts) < 3:
-            return
+            return await callback_query.message.edit_text(
+                "❌ Invalid download data."
+            )
         
         source = data_parts[1]
         item_id = data_parts[2]
         
-        await callback_query.message.edit_text(
-            f"🔄 Downloading...\n\n"
-            f"**Source:** {source}\n"
+        # Show downloading message
+        msg = await callback_query.message.edit_text(
+            f"🔄 **Downloading...**\n\n"
+            f"**Source:** {source.upper()}\n"
             f"**ID:** `{item_id}`\n\n"
-            f"_Download feature coming soon..._"
+            f"_Please wait..._"
         )
         
+        # Get search engine
+        engine = SearchEngine()
+        
+        try:
+            # Download song
+            file_path = await engine.download_song(
+                item_id=item_id,
+                source=source,
+                bitrate=320,
+                download_location="downloads"
+            )
+            
+            if not file_path:
+                return await msg.edit_text(
+                    f"❌ Failed to download song.\n\n"
+                    f"**Source:** {source.upper()}\n"
+                    f"**ID:** `{item_id}`"
+                )
+            
+            # Send audio file
+            await callback_query.message.reply_audio(
+                audio=file_path,
+                caption=f"🎵 **Song Downloaded!**\n\n"
+                        f"**Source:** {source.upper()}\n"
+                        f"**ID:** `{item_id}`\n\n"
+                        f"_Enjoy listening! 🎧_",
+                performer="AartiMusic Bot"
+            )
+            
+            # Delete the file after sending
+            try:
+                os.remove(file_path)
+            except:
+                pass
+            
+            # Update callback message
+            await msg.edit_text(
+                f"✅ **Download Complete!**\n\n"
+                f"**Source:** {source.upper()}\n"
+                f"**ID:** `{item_id}`\n\n"
+                f"_Check the audio above 👆_"
+            )
+            
+        except Exception as e:
+            logger.exception(f"Download error: {e}")
+            await msg.edit_text(
+                f"❌ Download failed.\n\n"
+                f"**Source:** {source.upper()}\n"
+                f"**ID:** `{item_id}`\n\n"
+                f"`{type(e).__name__}: {e}`"
+            )
+            
     except Exception as e:
-        logger.exception(f"Download error: {e}")
+        logger.exception(f"Download callback error: {e}")
+        try:
+            await callback_query.message.edit_text(
+                f"❌ Something went wrong.\n\n"
+                f"`{type(e).__name__}: {e}`"
+            )
+        except:
+            pass
