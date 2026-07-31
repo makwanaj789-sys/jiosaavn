@@ -2,7 +2,7 @@ import html
 import logging
 import traceback
 
-from api.jiosaavn import Jiosaavn
+from api.search_engine import SearchEngine
 from jiosaavn.bot import Bot
 
 from pyrogram import Client, filters
@@ -19,7 +19,7 @@ async def artist(client: Bot, callback: CallbackQuery):
     msg = callback.message
 
     try:
-        response = await Jiosaavn().get_artist(artist_id=artist_id, page_no=page_no)
+        response = await SearchEngine().get_artist(artist_id=artist_id, page_no=page_no)
         if not response or not response.get("topSongs"):
             reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="search#artists")]])
             return await callback.message.edit(
