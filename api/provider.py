@@ -1,160 +1,45 @@
 import logging
 from typing import Any, Dict, Optional
 
-# Ye import tab tak kaam karega jab tak aapke paas file exist karti hai
 from api.jiosaavn import Jiosaavn
-from api.youtube import search as youtube_search
-from api.youtube import get_info as youtube_info
-from api.youtube import download_song as youtube_download
+from api.youtube import download_video  # <--- Bas yahan se import sahi kiya
 
 logger = logging.getLogger(__name__)
 
 class Provider:
-
     def __init__(self):
-        # JioSaavn initialize kar rahe hain
         self.jiosaavn = Jiosaavn()
-        
-        # YouTube ke functions ko assign kar rahe hain
-        self.youtube_search = youtube_search
-        self.youtube_info = youtube_info
-        self.youtube_download = youtube_download
+        self.youtube = download_video  # Function assign kar diya
 
-    # =====================================
-    # SEARCH
-    # =====================================
-
-    async def search(
-        self,
-        query: str,
-        source: str = "jiosaavn",
-        search_type: str = "songs",
-        page_no: int = 1,
-        page_size: int = 10
-    ) -> Any:
-
+    async def search(self, query: str, source: str = "jiosaavn", search_type: str = "songs", page_no: int = 1, page_size: int = 10) -> Any:
         if source == "youtube":
-            return await self.youtube_search(
-                query=query,
-                limit=page_size
-            )
+            return await self.youtube(query=query, limit=page_size) # YouTube call
 
-        return await self.jiosaavn.search(
-            query=query,
-            search_type=search_type,
-            page_no=page_no,
-            page_size=page_size
-        )
+        return await self.jiosaavn.search(query=query, search_type=search_type, page_no=page_no, page_size=page_size)
 
-    # =====================================
-    # SEARCH ALL TYPES
-    # =====================================
-
-    async def search_all(
-        self,
-        query: str,
-        source: str = "jiosaavn"
-    ) -> Any:
-
+    async def search_all(self, query: str, source: str = "jiosaavn") -> Any:
         if source == "youtube":
-            return await self.youtube_search(
-                query=query,
-                limit=10
-            )
+            return await self.youtube(query=query, limit=10)
 
-        return await self.jiosaavn.search_all_types(
-            query=query
-        )
+        return await self.jiosaavn.search_all_types(query=query)
 
-    # =====================================
-    # SONG DETAILS
-    # =====================================
-
-    async def get_song(
-        self,
-        item_id: str,
-        source: str = "jiosaavn"
-    ) -> Optional[Dict]:
-
+    async def get_song(self, item_id: str, source: str = "jiosaavn") -> Optional[Dict]:
         if source == "youtube":
-            return await self.youtube_info(
-                item_id
-            )
+            return await self.youtube.get_info(item_id)
 
-        return await self.jiosaavn.get_song(
-            item_id
-        )
+        return await self.jiosaavn.get_song(item_id)
 
-    # =====================================
-    # ALBUM / PLAYLIST
-    # =====================================
+    async def get_playlist_or_album(self, album_id: str = None, playlist_id: str = None, page_no: int = 1, page_size: int = 10):
+        return await self.jiosaavn.get_playlist_or_album(album_id=album_id, playlist_id=playlist_id, page_no=page_no, page_size=page_size)
 
-    async def get_playlist_or_album(
-        self,
-        album_id: str = None,
-        playlist_id: str = None,
-        page_no: int = 1,
-        page_size: int = 10
-    ):
+    async def get_artist(self, artist_id: str, page_no: int = 1, page_size: int = 10):
+        return await self.jiosaavn.get_artist(artist_id=artist_id, page_no=page_no, page_size=page_size)
 
-        return await self.jiosaavn.get_playlist_or_album(
-            album_id=album_id,
-            playlist_id=playlist_id,
-            page_no=page_no,
-            page_size=page_size
-        )
+    async def get_lyrics(self, lyrics_id: str):
+        return await self.jiosaavn.get_song_lyrics(lyrics_id)
 
-    # =====================================
-    # ARTIST
-    # =====================================
-
-    async def get_artist(
-        self,
-        artist_id: str,
-        page_no: int = 1,
-        page_size: int = 10
-    ):
-
-        return await self.jiosaavn.get_artist(
-            artist_id=artist_id,
-            page_no=page_no,
-            page_size=page_size
-        )
-
-    # =====================================
-    # LYRICS
-    # =====================================
-
-    async def get_lyrics(
-        self,
-        lyrics_id: str
-    ):
-
-        return await self.jiosaavn.get_song_lyrics(
-            lyrics_id
-        )
-
-    # =====================================
-    # ⭐ DOWNLOAD
-    # =====================================
-
-    async def download_song(
-        self,
-        item_id: str,
-        source: str = "jiosaavn",
-        bitrate: int = 320,
-        download_location: str = None
-    ):
-
+    async def download_song(self, item_id: str, source: str = "jiosaavn", bitrate: int = 320, download_location: str = None):
         if source == "youtube":
-            return await self.youtube_download(
-                video_id=item_id,
-                bitrate=bitrate,
-                download_location=download_location
-            )
+            return await self.youtube.download_song(video_id=item_id, bitrate=bitrate, download_location=download_location)
 
-        return await self.jiosaavn.download_song(
-            song_id=item_id,
-            bitrate=bitrate,
-            download_location=download_location
-        )
+        return await self.jiosaavn.download_song(song_id=item_id, bitrate=bitrate, download_location=download_location)
