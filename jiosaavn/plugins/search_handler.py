@@ -2,7 +2,7 @@ import html
 import logging
 import traceback
 
-from api.jiosaavn import Jiosaavn
+from api.search_engine import SearchEngine
 from jiosaavn.bot import Bot
 
 from pyrogram import filters
@@ -382,27 +382,31 @@ async def search(
 
         try:
 
-            api = Jiosaavn()
+            engine = SearchEngine()
+
+            try:
+                source = user_data.get("source", "jiosaavn")
+            except Exception:
+                source = "jiosaavn"
 
             if search_type in (
                 "all",
                 "topquery"
             ):
 
-                response = (
-                    await api.search_all_types(
-                        query=query
-                    )
+                response = await engine.search(
+                    query=query,
+                    source=source,
+                    search_type="all"
                 )
 
             else:
 
-                response = (
-                    await api.search(
-                        query=query,
-                        search_type=search_type,
-                        page_no=page_no
-                    )
+                response = await engine.search(
+                    query=query,
+                    source=source,
+                    search_type=search_type,
+                    page_no=page_no
                 )
 
         except RuntimeError as e:
