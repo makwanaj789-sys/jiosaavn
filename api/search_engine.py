@@ -16,50 +16,68 @@ class SearchEngine:
     # ==========================================
 
     async def search(
-        self,
-        query: str,
-        source: str = "jiosaavn",
-        search_type: str = "songs",
-        page_no: int = 1,
-        page_size: int = 10
-    ) -> Dict[str, Any]:
+    self,
+    query: str,
+    source: str = "jiosaavn",
+    search_type: str = "songs",
+    page_no: int = 1,
+    page_size: int = 10
+):
 
-        if search_type == "all":
+    # ======================================
+    # ALL SEARCH
+    # ======================================
 
-            result = await self.provider.search_all(
-                query=query,
-                source=source
-            )
+    if search_type == "all":
 
-            return {
-                "source": source,
-                "type": "all",
-                "data": result
-            }
-
-        result = await self.provider.search(
+        result = await self.provider.search_all(
             query=query,
-            source=source,
-            search_type=search_type,
-            page_no=page_no,
-            page_size=page_size
+            source=source
         )
 
         if source == "youtube":
 
             return {
-                "source": "youtube",
-                "type": "songs",
-                "results": self._normalize_youtube(result)
+                "songs": {
+                    "data": self._normalize_youtube(result),
+                    "position": 1
+                }
             }
 
+        # IMPORTANT:
+        # Return original JioSaavn response
+        return result
+
+    # ======================================
+    # NORMAL SEARCH
+    # ======================================
+
+    result = await self.provider.search(
+        query=query,
+        source=source,
+        search_type=search_type,
+        page_no=page_no,
+        page_size=page_size
+    )
+
+    # ======================================
+    # YOUTUBE
+    # ======================================
+
+    if source == "youtube":
+
+        data = self._normalize_youtube(result)
+
         return {
-            "source": "jiosaavn",
-            "type": search_type,
-            "results": result.get("results", []),
-            "total": result.get("total", 0),
-            "raw": result
+            "results": data,
+            "total": len(data)
         }
+
+    # ======================================
+    # JIOSAAVN
+    # ======================================
+
+    return result
 
     # ==========================================
     # NORMALIZE YOUTUBE
