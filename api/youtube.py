@@ -1,270 +1,127 @@
-# api/youtube.py
-
-import logging
 import os
-import aiohttp
+import sys
+import tempfile
 import asyncio
-from typing import Dict, List, Optional, Any
+from concurrent.futures import ThreadPoolExecutor
+import yt_dlp
 
-logger = logging.getLogger(__name__)
+# Agar aapke paas logger hai toh use karein, warna print use karte hain
+# import logging
+# logger = logging.getLogger(__name__)
 
+# Ek global thread pool (aap apni requirement ke hisaab se max_workers badha sakte hain)
+executor = ThreadPoolExecutor(max_workers=2)
 
-class YouTube:
-    """YouTube API wrapper using YouTube Data API v3."""
+async def download_video(url: str):
+    """
+    Main function to download video from URL using yt-dlp with Cookies support.
+    """
+    cookies_path = None
+    result = {"success": False, "data": None, "error": None}
 
-    def __init__(self):
-        self.api_key = os.getenv("YOUTUBE_API_KEY", "")
-        self.base_url = "https://www.googleapis.com/youtube/v3"
-        
-        if not self.api_key:
-            logger.error("⚠️ YOUTUBE_API_KEY not found! Set it in environment variables.")
-        else:
-            logger.info("✅ YouTube API key loaded successfully")
-
-    # =============================================
-    # SEARCH
-    # =============================================
-
-    async def search(
-        self,
-        query: str,
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """Search YouTube videos."""
-        
-        if not self.api_key:
-            logger.error("YouTube API key missing")
-            return []
-
-        params = {
-            "part": "snippet",
-            "q": query,
-            "type": "video",
-            "videoCategoryId": "10",  # Music category
-            "maxResults": limit,
-            "key": self.api_key
-        }
-
+    # 1. Environment variable se cookies ka data uthayein (Railway par set kiya hua)
+    cookies_content = os.environ.get('YOUTUBE_COOKIES')
+    
+    # 2. Agar cookies milti hai, toh ek temporary file create karein
+    if cookies_content:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/search",
-                    params=params,
-                    timeout=15
-                ) as response:
-                    
-                    if response.status == 200:
-                        data = await response.json()
-                        results = self._parse_search_results(data)
-                        logger.info(f"🎵 YouTube search: '{query}' -> {len(results)} results")
-                        return results
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"YouTube API error: {response.status} - {error_text}")
-                        return []
-
-        except aiohttp.ClientError as e:
-            logger.error(f"YouTube connection error: {e}")
-            return []
+            # delete=False zaroori hai kyunki yt-dlp ko file path chahiye hota hai
+            # aur wo file tab tak exist karni chahiye jab tak download chal raha hai
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as f:
+                f.write(cookies_content)
+                cookies_path = f.name
+            print(f"✅ Cookies temporary file created: {cookies_path}")
         except Exception as e:
-            logger.exception(f"YouTube search error: {e}")
-            return []
+            print(f"⚠️ Error creating cookies file: {e}")
+            cookies_path = None
 
-    # =============================================
-    # GET VIDEO INFO
-    # =============================================
-
-    async def get_info(
-        self,
-        video_id: str
-    ) -> Optional[Dict]:
-        """Get detailed video information."""
+    # 3. yt-dlp options set karein
+    # Aap yahan 'format' ko apni requirement ke hisaab se change kar sakte hain
+    ydl_opts = {
+        # Audio/Video format. Ye best quality video + audio lega.
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', 
+        'outtmpl': '%(title)s.%(ext)s',  # Output file ka naam
+        'quiet': False,                  # False rakhoge toh Railway logs mein progress dikhega
+        'no_warnings': False,    
+        'ignoreerrors': True,
+        'nooverwrites': True,
         
-        if not self.api_key:
-            logger.error("YouTube API key missing")
-            return None
-
-        params = {
-            "part": "snippet,contentDetails",
-            "id": video_id,
-            "key": self.api_key
+        # 🟢 IMPORTANT: Cookies file ka path pass karna
+        'cookiefile': cookies_path,
+        
+        # Headers taaki ek real browser jaisa dikhe (YouTube bot detection se bachne ke liye)
+        'headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
         }
+    }
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.base_url}/videos",
-                    params=params,
-                    timeout=15
-                ) as response:
-                    
-                    if response.status == 200:
-                        data = await response.json()
-                        items = data.get("items", [])
-                        if items:
-                            video_info = self._parse_video_info(items[0])
-                            logger.info(f"✅ Video info fetched: {video_info.get('title')}")
-                            return video_info
-                        else:
-                            logger.warning(f"⚠️ Video not found: {video_id}")
-                            return None
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"YouTube API error: {response.status} - {error_text}")
-                        return None
+    try:
+        # 4. Asynchronous execution (ThreadPoolExecutor use karke)
+        loop = asyncio.get_running_loop()
 
-        except Exception as e:
-            logger.exception(f"Failed to get video info: {e}")
-            return None
+        def download_sync():
+            """Ye synchronous function background thread mein chalega"""
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # extract_info 'download=True' karega toh actual file download hogi
+                info = ydl.extract_info(url, download=True)
+                return info
 
-    # =============================================
-    # DOWNLOAD SONG
-    # =============================================
-
-    async def download_song(
-        self,
-        video_id: str,
-        bitrate: int = 320,
-        download_location: str = None
-    ) -> Optional[str]:
-        """
-        Download YouTube video as audio using yt-dlp.
-        """
+        # Run the blocking download in a separate thread
+        print(f"🚀 Starting download for: {url}")
+        info = await loop.run_in_executor(executor, download_sync)
         
-        try:
-            import yt_dlp
-        except ImportError:
-            logger.error("❌ yt-dlp not installed")
-            return None
+        # Download ho gayi, ab result prepare karein
+        requested_downloads = info.get('requested_downloads', [])
+        filepath = None
+        if requested_downloads and len(requested_downloads) > 0:
+            filepath = requested_downloads[0].get('filepath')
 
-        url = f"https://youtu.be/{video_id}"
-        
-        if not download_location:
-            download_location = "downloads"
-        
-        os.makedirs(download_location, exist_ok=True)
-        
-        # yt-dlp options - optimized for audio download
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": str(bitrate),
-            }],
-            "outtmpl": os.path.join(download_location, "%(title)s.%(ext)s"),
-            "quiet": True,
-            "no_warnings": True,
-            "noplaylist": True,
-            "extract_audio": True,
-            "audio_format": "mp3",
-            "audio_quality": bitrate,
-            # Skip parts to avoid bot detection
-            "extractor_args": {
-                "youtube": {
-                    "skip": ["dash", "hls"],
-                }
-            }
+        result = {
+            "success": True,
+            "data": {
+                "title": info.get('title'),
+                "duration": info.get('duration'),
+                "view_count": info.get('view_count'),
+                "uploader": info.get('uploader'),
+                "filepath": filepath
+            },
+            "error": None
         }
-        
-        try:
-            loop = asyncio.get_event_loop()
-            
-            def download():
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    filename = ydl.prepare_filename(info)
-                    filename = filename.rsplit(".", 1)[0] + ".mp3"
-                    return filename
-            
-            file_path = await loop.run_in_executor(None, download)
-            logger.info(f"✅ YouTube download success: {file_path}")
-            return file_path
-            
-        except Exception as e:
-            logger.exception(f"❌ YouTube download failed: {e}")
-            return None
+        print(f"✅ Download successful: {info.get('title')}")
 
-    # =============================================
-    # PARSE HELPERS
-    # =============================================
+    except yt_dlp.utils.DownloadError as e:
+        error_msg = str(e)
+        print(f"❌ yt-dlp DownloadError: {error_msg}")
+        
+        # Agar cookies fail ho jayein toh specific message do
+        if "Sign in to confirm" in error_msg:
+            error_msg = "YouTube is blocking the request (Bot Detection). Check if the 'YOUTUBE_COOKIES' variable contains a valid, fresh cookies.txt from a logged-in account."
+        
+        result["error"] = error_msg
 
-    def _parse_search_results(self, data: Dict) -> List[Dict]:
-        """Parse YouTube search API response."""
-        
-        results = []
-        items = data.get("items", [])
-        
-        for item in items:
-            video_id = item.get("id", {}).get("videoId")
-            if not video_id:
-                continue
-            
-            snippet = item.get("snippet", {})
-            thumbnails = snippet.get("thumbnails", {})
-            
-            # Get best thumbnail
-            thumbnail = ""
-            for quality in ["high", "medium", "default"]:
-                if quality in thumbnails:
-                    thumbnail = thumbnails[quality].get("url", "")
-                    break
-            
-            results.append({
-                "id": video_id,
-                "title": snippet.get("title", "Unknown Title"),
-                "uploader": snippet.get("channelTitle", "Unknown Artist"),
-                "description": snippet.get("description", ""),
-                "thumbnail": thumbnail,
-                "url": f"https://youtu.be/{video_id}",
-                "source": "youtube"
-            })
-        
-        return results
+    except Exception as e:
+        print(f"❌ Unexpected Error: {e}")
+        result["error"] = f"Internal Server Error: {str(e)}"
 
-    def _parse_video_info(self, video_data: Dict) -> Dict:
-        """Parse YouTube video API response."""
-        
-        video_id = video_data.get("id", "")
-        snippet = video_data.get("snippet", {})
-        content_details = video_data.get("contentDetails", {})
-        
-        # Parse duration (ISO 8601 format)
-        duration_str = content_details.get("duration", "PT0S")
-        duration = self._parse_duration(duration_str)
-        
-        thumbnails = snippet.get("thumbnails", {})
-        thumbnail = ""
-        for quality in ["high", "medium", "default"]:
-            if quality in thumbnails:
-                thumbnail = thumbnails[quality].get("url", "")
-                break
-        
-        return {
-            "id": video_id,
-            "title": snippet.get("title", "Unknown Title"),
-            "uploader": snippet.get("channelTitle", "Unknown Artist"),
-            "description": snippet.get("description", ""),
-            "duration": duration,
-            "thumbnail": thumbnail,
-            "url": f"https://youtu.be/{video_id}",
-            "source": "youtube"
-        }
+    finally:
+        # 5. Clean up: Temporary cookies file ko delete kar dein
+        if cookies_path and os.path.exists(cookies_path):
+            try:
+                os.remove(cookies_path)
+                print(f"🧹 Cleaned up cookies temp file: {cookies_path}")
+            except Exception as clean_error:
+                print(f"⚠️ Could not delete temp file: {clean_error}")
 
-    def _parse_duration(self, duration_str: str) -> int:
-        """Parse ISO 8601 duration to seconds."""
-        
-        import re
-        
-        # Pattern: PT1H2M3S, PT1H, PT2M, PT3S, etc.
-        pattern = r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?'
-        match = re.match(pattern, duration_str)
-        
-        if not match:
-            return 0
-        
-        hours = int(match.group(1) or 0)
-        minutes = int(match.group(2) or 0)
-        seconds = int(match.group(3) or 0)
-        
-        return hours * 3600 + minutes * 60 + seconds
+    return result
+
+# Agar aap isko seedha test karna chahte ho locally:
+if __name__ == "__main__":
+    async def main():
+        test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        res = await download_video(test_url)
+        print("\nFinal Result:", res)
+    
+    asyncio.run(main())
