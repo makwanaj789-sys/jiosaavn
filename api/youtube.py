@@ -25,13 +25,12 @@ def _get_cookies_file():
 async def download_video(query: str):
     cookies_path = _get_cookies_file()
     
-    # 🔥 MAGIC LOGIC: Agar query URL nahi hai, toh "ytsearch:" prefix laga do
     if not is_url(query):
-        final_query = f"ytsearch10:{query}"  # Top 10 results search karega
-        download = False  # Search mode mein download nahi karna
+        final_query = f"ytsearch20:{query}"  # Top 20 results search karega
+        download = False
     else:
         final_query = query
-        download = True   # URL mode mein download karna hai
+        download = True
     
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -39,7 +38,7 @@ async def download_video(query: str):
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookies_path,
-        'extract_flat': not download, # Search mode mein flat extract karo
+        'extract_flat': not download,
     }
     
     try:
@@ -51,7 +50,6 @@ async def download_video(query: str):
         
         info = await loop.run_in_executor(None, sync_download)
         
-        # Agar URL tha (Single Video Download)
         if download:
             filepath = None
             if info.get('requested_downloads'):
@@ -65,8 +63,6 @@ async def download_video(query: str):
                     "filepath": filepath
                 }
             }
-            
-        # Agar Text tha (Search Results)
         else:
             results = []
             entries = info.get('entries', [])
@@ -88,7 +84,6 @@ async def download_video(query: str):
     except Exception as e:
         return {"success": False, "error": str(e)}
     finally:
-        # Temporary cookies file clean karo
         if cookies_path and os.path.exists(cookies_path):
             try:
                 os.remove(cookies_path)
