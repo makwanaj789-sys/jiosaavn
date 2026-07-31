@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from api.provider import Provider
 
@@ -37,6 +37,16 @@ class SearchEngine:
 
             if source == "youtube":
 
+                # Handle case when result is None or not a list
+                if not result or not isinstance(result, list):
+                    return {
+                        "songs": {
+                            "data": [],
+                            "position": 1
+                        },
+                        "total": 0
+                    }
+
                 return {
                     "songs": {
                         "data": self._normalize_youtube(result),
@@ -66,6 +76,13 @@ class SearchEngine:
 
         if source == "youtube":
 
+            # Handle case when result is None or not a list
+            if not result or not isinstance(result, list):
+                return {
+                    "results": [],
+                    "total": 0
+                }
+
             data = self._normalize_youtube(result)
 
             return {
@@ -87,27 +104,61 @@ class SearchEngine:
         self,
         results: List[Dict]
     ) -> List[Dict]:
+        """Normalize YouTube results to match JioSaavn format."""
+        
+        if not results:
+            return []
 
         data = []
 
         for item in results:
+            if not item:
+                continue
+
+            video_id = item.get("id")
+            if not video_id:
+                continue
+
+            # Get title
+            title = item.get("title", "Unknown Title")
+            
+            # Get uploader/artist
+            artist = item.get("uploader", "Unknown Artist")
+            
+            # Get duration
+            duration = item.get("duration", 0)
+            
+            # Format duration
+            if duration:
+                minutes = duration // 60
+                seconds = duration % 60
+                duration_str = f"{minutes}:{seconds:02d}"
+            else:
+                duration_str = "N/A"
+
+            # Get thumbnail
+            thumbnail = item.get("thumbnail", "")
+            
+            # Create YouTube URL
+            perma_url = f"https://youtu.be/{video_id}"
 
             data.append({
-
-                "id": item.get("id"),
-
-                "title": item.get("title"),
-
-                "artist": item.get("uploader"),
-
-                "duration": item.get("duration"),
-
-                "thumbnail": item.get("thumbnail"),
-
-                "url": item.get("url"),
-
-                "source": "youtube"
-
+                "id": video_id,
+                "title": title,
+                "artist": artist,
+                "name": artist,  # For compatibility
+                "duration": duration,
+                "duration_str": duration_str,
+                "thumbnail": thumbnail,
+                "url": perma_url,
+                "perma_url": perma_url,  # For compatibility
+                "source": "youtube",
+                "type": "song",
+                "more_info": {
+                    "album": artist,
+                    "duration": duration_str,
+                    "year": "YouTube"
+                }
             })
 
         return data
@@ -120,7 +171,7 @@ class SearchEngine:
         self,
         item_id: str,
         source: str = "jiosaavn"
-    ):
+    ) -> Optional[Dict]:
 
         return await self.provider.get_song(
             item_id=item_id,
@@ -148,9 +199,9 @@ class SearchEngine:
 
     async def get_playlist_or_album(
         self,
-        album_id=None,
-        playlist_id=None,
-        page_no=1
+        album_id: str = None,
+        playlist_id: str = None,
+        page_no: int = 1
     ):
 
         return await self.provider.get_playlist_or_album(
@@ -170,4 +221,35 @@ class SearchEngine:
 
         return await self.provider.get_lyrics(
             lyrics_id
+        )
+
+    # ==========================================
+    # ⭐ DOWNLOAD SONG - NEW METHOD
+    # ==========================================
+
+    async def download_song(
+        self,
+        item_id: str,
+        source: str = "jiosaavn",
+        bitrate: int = 320,
+        download_location: str = None
+    ) -> Optional[str]:
+        """
+        Download song from YouTube or JioSaavn.
+        
+        Args:
+            item_id: Song/video ID
+            source: "youtube" or "jiosaavn"
+            bitrate: Audio bitrate (128, 192, 256, 320)
+            download_location: Custom download path
+        
+        Returns:
+            Path to downloaded file or None if failed
+        """
+        
+        return await self.provider.download_song(
+            item_id=item_id,
+            source=source,
+            bitrate=bitrate,
+            download_location=download_location
         )
