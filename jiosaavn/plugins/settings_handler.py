@@ -46,7 +46,7 @@ async def settings(client: Bot, message: Message|CallbackQuery):
         if len(data) > 1:
             try:
                 _, key, value = data
-                if key in ["type", "quality"] and value:  # Validate key and value
+                if key in ["type", "quality", "source"] and value:  # Validate key and value
                     await client.db.update_user(message.from_user.id, key, value)
                     logger.info(f"Updated user {message.from_user.id} with {key}={value}")
                 else:
@@ -64,8 +64,13 @@ async def settings(client: Bot, message: Message|CallbackQuery):
     songs = '✅ Songs' if type == 'songs' else 'Songs'
     playlists = '✅ Playlist' if type == 'playlists' else 'Playlist'
     
+    source = user.get('source', 'jiosaavn')
+
     quality_320 = '✅ 320kbps' if quality == '320kbps' else '320kbps'
     quality_160 = '✅ 160kbps' if quality == '160kbps' else '160kbps'
+
+    js = '✅ JioSaavn' if source == 'jiosaavn' else 'JioSaavn'
+    yt = '✅ YouTube' if source == 'youtube' else 'YouTube'
     
     buttons = [
         [
@@ -78,6 +83,13 @@ async def settings(client: Bot, message: Message|CallbackQuery):
         [
             InlineKeyboardButton(songs, callback_data='settings#type#songs'),
             InlineKeyboardButton(playlists, callback_data='settings#type#playlists'),
+        ],
+        [
+            InlineKeyboardButton("𝐌𝐮𝐬𝐢𝐜 𝐒𝐨𝐮𝐫𝐜𝐞 🎵", callback_data="dummy"),
+        ],
+        [
+            InlineKeyboardButton(js, callback_data='settings#source#jiosaavn'),
+            InlineKeyboardButton(yt, callback_data='settings#source#youtube')
         ],
         [
             InlineKeyboardButton("𝐀𝐮𝐝𝐢𝐨 𝐐𝐮𝐚𝐥𝐢𝐭𝐲 🔊", callback_data="dummy"),
