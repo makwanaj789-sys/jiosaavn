@@ -6,7 +6,8 @@ import logging
 from datetime import datetime
 
 from jiosaavn.bot import Bot
-from api.jiosaavn import Jiosaavn
+from api.download_engine import DownloadEngine
+from api.search_engine import SearchEngine
 
 import aiohttp
 import aiofiles
@@ -175,7 +176,7 @@ async def download(
         while True:
 
             response = (
-                await Jiosaavn()
+                await SearchEngine()
                 .get_playlist_or_album(
                     album_id=album_id,
                     playlist_id=playlist_id,
@@ -352,7 +353,7 @@ async def download_tool(
     # GET SONG DATA
     # =====================================================
 
-    song_response = await Jiosaavn().get_song(
+    song_response = await SearchEngine().get_song(
         song_id=song_id
     )
 
@@ -716,8 +717,8 @@ async def download_tool(
         # =================================================
 
         pre_audio = (
-            await Jiosaavn()
-            .download_song(
+            await DownloadEngine()
+            .download(
                 song_id=song_id,
                 bitrate=bitrate,
                 download_location=pre_file_name
