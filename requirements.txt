@@ -10,3 +10,4 @@ humanfriendly
 python-dotenv
 tgcrypto-pyrofork
 aiohttp[speedups]
+yt-dlp>=2026.07.01
