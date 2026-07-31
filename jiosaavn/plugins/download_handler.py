@@ -17,14 +17,14 @@ async def download_callback(client: Bot, message: CallbackQuery):
         # Video ID nikaalo
         video_id = data.split("#")[1]
         if not video_id:
-            await message.edit("❌ Invalid video ID.")
+            await message.message.edit_text("❌ Invalid video ID.")
             return
 
         # Download Engine ko call karo
         engine = SearchEngine()
 
         # Message show karo
-        await message.edit("⏳ Downloading audio from YouTube... Please wait.")
+        await message.message.edit_text("⏳ Downloading audio from YouTube... Please wait.")
 
         # Download karo
         result = await engine.download_song(video_id)
@@ -42,11 +42,11 @@ async def download_callback(client: Bot, message: CallbackQuery):
         filepath = data.get("filepath")
 
         if not filepath:
-            await message.edit("❌ File path not found after download.")
+            await message.message.edit_text("❌ File path not found after download.")
             return
 
         # ⭐ User ko file bhej do
-        await message.edit(f"📤 Uploading `{title}`...")
+        await message.message.edit_text(f"📤 Uploading `{title}`...")
         await client.send_audio(
             chat_id=message.from_user.id,
             audio=filepath,
@@ -64,7 +64,7 @@ async def download_callback(client: Bot, message: CallbackQuery):
     except Exception as e:
         logger.exception(f"Download callback failed: {e}")
         try:
-            await message.edit(
+            await message.message.edit_text(
                 f"❌ An error occurred during download.\n\n`{type(e).__name__}: {e}`"
             )
         except:
