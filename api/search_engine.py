@@ -16,68 +16,68 @@ class SearchEngine:
     # ==========================================
 
     async def search(
-    self,
-    query: str,
-    source: str = "jiosaavn",
-    search_type: str = "songs",
-    page_no: int = 1,
-    page_size: int = 10
-):
+        self,
+        query: str,
+        source: str = "jiosaavn",
+        search_type: str = "songs",
+        page_no: int = 1,
+        page_size: int = 10
+    ):
 
-    # ======================================
-    # ALL SEARCH
-    # ======================================
+        # ======================================
+        # ALL SEARCH
+        # ======================================
 
-    if search_type == "all":
+        if search_type == "all":
 
-        result = await self.provider.search_all(
+            result = await self.provider.search_all(
+                query=query,
+                source=source
+            )
+
+            if source == "youtube":
+
+                return {
+                    "songs": {
+                        "data": self._normalize_youtube(result),
+                        "position": 1
+                    }
+                }
+
+            # IMPORTANT:
+            # Return original JioSaavn response
+            return result
+
+        # ======================================
+        # NORMAL SEARCH
+        # ======================================
+
+        result = await self.provider.search(
             query=query,
-            source=source
+            source=source,
+            search_type=search_type,
+            page_no=page_no,
+            page_size=page_size
         )
+
+        # ======================================
+        # YOUTUBE
+        # ======================================
 
         if source == "youtube":
 
+            data = self._normalize_youtube(result)
+
             return {
-                "songs": {
-                    "data": self._normalize_youtube(result),
-                    "position": 1
-                }
+                "results": data,
+                "total": len(data)
             }
 
-        # IMPORTANT:
-        # Return original JioSaavn response
+        # ======================================
+        # JIOSAAVN
+        # ======================================
+
         return result
-
-    # ======================================
-    # NORMAL SEARCH
-    # ======================================
-
-    result = await self.provider.search(
-        query=query,
-        source=source,
-        search_type=search_type,
-        page_no=page_no,
-        page_size=page_size
-    )
-
-    # ======================================
-    # YOUTUBE
-    # ======================================
-
-    if source == "youtube":
-
-        data = self._normalize_youtube(result)
-
-        return {
-            "results": data,
-            "total": len(data)
-        }
-
-    # ======================================
-    # JIOSAAVN
-    # ======================================
-
-    return result
 
     # ==========================================
     # NORMALIZE YOUTUBE
