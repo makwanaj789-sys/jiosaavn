@@ -1,3 +1,5 @@
+# search_handler.py - Modified version with YouTube support
+
 import html
 import logging
 import traceback
@@ -102,10 +104,6 @@ async def search(
             # =============================================
             # POST CREATOR PROTECTION
             # =============================================
-            #
-            # Agar owner Post Creator use kar raha hai,
-            # uske text/button name ko song search mat karo.
-            # =============================================
 
             if (
                 message.from_user
@@ -140,12 +138,6 @@ async def search(
             # =============================================
 
             else:
-
-                # Supports:
-                #
-                # /am Manwa Lage
-                #
-                # /am@BotUsername Manwa Lage
 
                 parts = raw_text.split(
                     maxsplit=1
@@ -195,13 +187,6 @@ async def search(
             ):
                 user_data = {}
 
-            # =============================================
-            # ⭐ YOUTUBE FIRST PRIORITY
-            # =============================================
-            # Force YouTube as primary source
-            # =============================================
-            
-            source = "youtube"  # YouTube first
             search_type = (
                 user_data.get("type")
                 or "all"
@@ -269,12 +254,6 @@ async def search(
                     or ""
                 ).strip()
 
-                # Group search:
-                #
-                # /am Manwa Lage
-                #
-                # Remove /am
-
                 if query.lower().startswith(
                     "/am"
                 ):
@@ -301,8 +280,6 @@ async def search(
                     "original search query."
                 )
 
-            source = "youtube"  # YouTube first for callbacks too
-
         # =================================================
         # EMPTY QUERY CHECK
         # =================================================
@@ -315,17 +292,6 @@ async def search(
 
         # =================================================
         # ADMIN ANALYTICS
-        # =================================================
-        #
-        # Only ORIGINAL searches count.
-        #
-        # Category click:
-        # Songs / Albums / Artists
-        #
-        # Pagination:
-        # Next / Previous
-        #
-        # These will NOT increase the search counter.
         # =================================================
 
         if isinstance(message, Message):
@@ -342,26 +308,16 @@ async def search(
                     message.chat.id
                 )
 
-                # =========================================
-                # USER + SEARCH TRACKING
-                # =========================================
-
                 if user_id:
 
-                    # Ensure user exists
                     await client.db.get_user(
                         user_id
                     )
 
-                    # +1 search
                     await client.db.add_search(
                         user_id=user_id,
                         chat_id=chat_id
                     )
-
-                # =========================================
-                # GROUP TRACKING
-                # =========================================
 
                 if (
                     message.chat.type
@@ -377,151 +333,86 @@ async def search(
 
             except Exception:
 
-                # Analytics error should NEVER
-                # break music searching.
-
                 logger.exception(
                     "Failed to save "
                     "search analytics"
                 )
 
         # =================================================
-        # SEARCH YOUTUBE FIRST
+        # SEARCH ENGINE - YOUTUBE FIRST
         # =================================================
 
         try:
 
             engine = SearchEngine()
 
-            if search_type in (
-                "all",
-                "topquery"
-            ):
-
-                # Try YouTube search first
-                response = await engine.search(
-                    query=query,
-                    source="youtube",  # YouTube first
-                    search_type="all"
-                )
-
-            else:
-
-                # Try YouTube search first
-                response = await engine.search(
-                    query=query,
-                    source="youtube",  # YouTube first
-                    search_type=search_type,
-                    page_no=page_no
-                )
-
-            # =============================================
-            # ⭐ FALLBACK TO JIOSAAVN IF YOUTUBE FAILS
-            # =============================================
+            # Try YouTube search first
+            logger.info(f"Searching YouTube for: {query}")
             
-            # Check if YouTube returned empty results
+            response = await engine.search(
+                query=query,
+                source="youtube",  # YouTube first
+                search_type=search_type,
+                page_no=page_no
+            )
+
+            # Check if YouTube returned results
             has_results = False
             
             if isinstance(response, dict):
-                # Check for empty results
                 if search_type in ("all", "topquery"):
-                    # Check topquery or any other category
-                    if response.get("topquery"):
-                        topquery_data = safe_list(
-                            response.get("topquery", {}).get("data", [])
-                        )
-                        if topquery_data:
-                            has_results = True
-                    elif response.get("songs"):
-                        songs_data = safe_list(
-                            response.get("songs", {}).get("data", [])
-                        )
-                        if songs_data:
-                            has_results = True
+                    # For "all" search, check songs data
+                    songs_data = safe_list(
+                        response.get("songs", {}).get("data", [])
+                    )
+                    if songs_data:
+                        has_results = True
                 else:
+                    # For specific search types
                     results_data = safe_list(
                         response.get("results", [])
                     )
                     if results_data:
                         has_results = True
+                    else:
+                        # Also check if results is nested
+                        for key in response:
+                            if key not in ["total", "position"]:
+                                data = safe_list(
+                                    response.get(key, {}).get("data", [])
+                                )
+                                if data:
+                                    has_results = True
+                                    break
+
+            # =============================================
+            # FALLBACK TO JIOSAAVN IF NO RESULTS
+            # =============================================
             
-            # If YouTube has no results, fallback to JioSaavn
             if not has_results:
                 logger.info(f"No YouTube results for '{query}'. Falling back to JioSaavn.")
                 
-                # Search with JioSaavn
-                if search_type in ("all", "topquery"):
-                    response = await engine.search(
-                        query=query,
-                        source="jiosaavn",  # Fallback to JioSaavn
-                        search_type="all"
-                    )
-                else:
-                    response = await engine.search(
-                        query=query,
-                        source="jiosaavn",  # Fallback to JioSaavn
-                        search_type=search_type,
-                        page_no=page_no
-                    )
-
-        except RuntimeError as e:
-
-            logger.error(
-                "API RuntimeError: %s",
-                e
-            )
-
-            traceback.print_exc()
-            
-            # Try JioSaavn as fallback on error
-            try:
-                logger.info(f"Error with YouTube. Falling back to JioSaavn for '{query}'.")
-                
-                if search_type in ("all", "topquery"):
-                    response = await engine.search(
-                        query=query,
-                        source="jiosaavn",
-                        search_type="all"
-                    )
-                else:
-                    response = await engine.search(
-                        query=query,
-                        source="jiosaavn",
-                        search_type=search_type,
-                        page_no=page_no
-                    )
-            except Exception as fallback_error:
-                return await send_msg.edit(
-                    f"❌ Search failed on both YouTube and JioSaavn.\n\n"
-                    f"`{type(fallback_error).__name__}: {fallback_error}`"
+                response = await engine.search(
+                    query=query,
+                    source="jiosaavn",
+                    search_type=search_type,
+                    page_no=page_no
                 )
 
         except Exception as e:
-
-            logger.exception(
-                "Search failed"
-            )
-
-            traceback.print_exc()
+            logger.exception(f"YouTube search failed: {e}")
             
-            # Try JioSaavn as fallback on error
+            # Try JioSaavn as fallback
             try:
-                logger.info(f"Error with YouTube. Falling back to JioSaavn for '{query}'.")
-                
-                if search_type in ("all", "topquery"):
-                    response = await engine.search(
-                        query=query,
-                        source="jiosaavn",
-                        search_type="all"
-                    )
-                else:
-                    response = await engine.search(
-                        query=query,
-                        source="jiosaavn",
-                        search_type=search_type,
-                        page_no=page_no
-                    )
+                logger.info(f"Falling back to JioSaavn for '{query}'")
+                response = await engine.search(
+                    query=query,
+                    source="jiosaavn",
+                    search_type=search_type,
+                    page_no=page_no
+                )
             except Exception as fallback_error:
+                logger.exception(f"JioSaavn fallback also failed: {fallback_error}")
                 return await send_msg.edit(
                     f"❌ Search failed on both YouTube and JioSaavn.\n\n"
                     f"`{type(fallback_error).__name__}: {fallback_error}`"
@@ -751,6 +642,10 @@ async def search(
                     ):
                         continue
 
+                    # Skip total and position keys
+                    if result_type in ["total", "position"]:
+                        continue
+
                     valid_items.append(
                         (
                             result_type,
@@ -830,31 +725,29 @@ async def search(
 
         else:
 
-            total_results = (
-                response.get(
-                    "total"
-                )
-                or 0
-            )
-
-            try:
-
-                total_results = int(
-                    total_results
-                )
-
-            except (
-                ValueError,
-                TypeError
-            ):
-
-                total_results = 0
-
+            # Get results from response
             results = safe_list(
-                response.get(
-                    "results"
-                )
+                response.get("results", [])
             )
+            
+            # If no results, try to get from nested structure
+            if not results:
+                for key in response:
+                    if key not in ["total", "position"]:
+                        nested_data = safe_list(
+                            response.get(key, {}).get("data", [])
+                        )
+                        if nested_data:
+                            results = nested_data
+                            break
+
+            total_results = len(results)
+            
+            if response.get("total"):
+                try:
+                    total_results = int(response.get("total"))
+                except (ValueError, TypeError):
+                    pass
 
             for result in results:
 
@@ -874,6 +767,15 @@ async def search(
                     ),
                     ""
                 )
+
+                # If perma_url not found, try url
+                if not perma_url:
+                    perma_url = safe_text(
+                        result.get(
+                            "url"
+                        ),
+                        ""
+                    )
 
                 if not perma_url:
                     continue
@@ -908,7 +810,7 @@ async def search(
                     result.get(
                         "type"
                     ),
-                    ""
+                    "song"  # Default to song for YouTube
                 ).lower()
 
                 # =========================================
@@ -921,6 +823,22 @@ async def search(
                     ),
                     "Unknown"
                 )
+
+                # If no name, try artist or uploader
+                if artist == "Unknown":
+                    artist = safe_text(
+                        result.get(
+                            "artist"
+                        ),
+                        "Unknown"
+                    )
+                    if artist == "Unknown":
+                        artist = safe_text(
+                            result.get(
+                                "uploader"
+                            ),
+                            "Unknown"
+                        )
 
                 # =========================================
                 # MORE INFO
@@ -938,6 +856,10 @@ async def search(
                     ),
                     ""
                 )
+
+                # If no album, use artist name
+                if not album and artist != "Unknown":
+                    album = artist
 
                 # =========================================
                 # BUTTON LABEL
@@ -972,7 +894,8 @@ async def search(
                 )
 
                 if not button_label:
-                    continue
+                    # Default to song type
+                    button_label = f"🎙 {title}"
 
                 buttons.append(
                     [
