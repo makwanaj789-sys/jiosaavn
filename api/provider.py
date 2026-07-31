@@ -4,7 +4,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from api.jiosaavn import Jiosaavn
-from api.youtube import YouTube
+from api.youtube import download_video
 
 logger = logging.getLogger(__name__)
 
