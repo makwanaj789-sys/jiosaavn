@@ -195,6 +195,13 @@ async def search(
             ):
                 user_data = {}
 
+            # =============================================
+            # ⭐ YOUTUBE FIRST PRIORITY
+            # =============================================
+            # Force YouTube as primary source
+            # =============================================
+            
+            source = "youtube"  # YouTube first
             search_type = (
                 user_data.get("type")
                 or "all"
@@ -294,6 +301,8 @@ async def search(
                     "original search query."
                 )
 
+            source = "youtube"  # YouTube first for callbacks too
+
         # =================================================
         # EMPTY QUERY CHECK
         # =================================================
@@ -377,66 +386,146 @@ async def search(
                 )
 
         # =================================================
-        # SEARCH JIOSAAVN
+        # SEARCH YOUTUBE FIRST
         # =================================================
 
         try:
 
             engine = SearchEngine()
 
-            try:
-                source = user_data.get("source", "jiosaavn")
-            except Exception:
-                source = "jiosaavn"
-
             if search_type in (
                 "all",
                 "topquery"
             ):
 
+                # Try YouTube search first
                 response = await engine.search(
                     query=query,
-                    source=source,
+                    source="youtube",  # YouTube first
                     search_type="all"
                 )
 
             else:
 
+                # Try YouTube search first
                 response = await engine.search(
                     query=query,
-                    source=source,
+                    source="youtube",  # YouTube first
                     search_type=search_type,
                     page_no=page_no
                 )
 
+            # =============================================
+            # ⭐ FALLBACK TO JIOSAAVN IF YOUTUBE FAILS
+            # =============================================
+            
+            # Check if YouTube returned empty results
+            has_results = False
+            
+            if isinstance(response, dict):
+                # Check for empty results
+                if search_type in ("all", "topquery"):
+                    # Check topquery or any other category
+                    if response.get("topquery"):
+                        topquery_data = safe_list(
+                            response.get("topquery", {}).get("data", [])
+                        )
+                        if topquery_data:
+                            has_results = True
+                    elif response.get("songs"):
+                        songs_data = safe_list(
+                            response.get("songs", {}).get("data", [])
+                        )
+                        if songs_data:
+                            has_results = True
+                else:
+                    results_data = safe_list(
+                        response.get("results", [])
+                    )
+                    if results_data:
+                        has_results = True
+            
+            # If YouTube has no results, fallback to JioSaavn
+            if not has_results:
+                logger.info(f"No YouTube results for '{query}'. Falling back to JioSaavn.")
+                
+                # Search with JioSaavn
+                if search_type in ("all", "topquery"):
+                    response = await engine.search(
+                        query=query,
+                        source="jiosaavn",  # Fallback to JioSaavn
+                        search_type="all"
+                    )
+                else:
+                    response = await engine.search(
+                        query=query,
+                        source="jiosaavn",  # Fallback to JioSaavn
+                        search_type=search_type,
+                        page_no=page_no
+                    )
+
         except RuntimeError as e:
 
             logger.error(
-                "JioSaavn API "
-                "RuntimeError: %s",
+                "API RuntimeError: %s",
                 e
             )
 
             traceback.print_exc()
-
-            return await send_msg.edit(
-                "❌ Connection refused by "
-                "JioSaavn API.\n\n"
-                "Please try again."
-            )
+            
+            # Try JioSaavn as fallback on error
+            try:
+                logger.info(f"Error with YouTube. Falling back to JioSaavn for '{query}'.")
+                
+                if search_type in ("all", "topquery"):
+                    response = await engine.search(
+                        query=query,
+                        source="jiosaavn",
+                        search_type="all"
+                    )
+                else:
+                    response = await engine.search(
+                        query=query,
+                        source="jiosaavn",
+                        search_type=search_type,
+                        page_no=page_no
+                    )
+            except Exception as fallback_error:
+                return await send_msg.edit(
+                    f"❌ Search failed on both YouTube and JioSaavn.\n\n"
+                    f"`{type(fallback_error).__name__}: {fallback_error}`"
+                )
 
         except Exception as e:
 
             logger.exception(
-                "JioSaavn search failed"
+                "Search failed"
             )
 
             traceback.print_exc()
-
-            return await send_msg.edit(
-                "❌ Search failed.\n\n"
-                f"`{type(e).__name__}: {e}`"
-            )
+            
+            # Try JioSaavn as fallback on error
+            try:
+                logger.info(f"Error with YouTube. Falling back to JioSaavn for '{query}'.")
+                
+                if search_type in ("all", "topquery"):
+                    response = await engine.search(
+                        query=query,
+                        source="jiosaavn",
+                        search_type="all"
+                    )
+                else:
+                    response = await engine.search(
+                        query=query,
+                        source="jiosaavn",
+                        search_type=search_type,
+                        page_no=page_no
+                    )
+            except Exception as fallback_error:
+                return await send_msg.edit(
+                    f"❌ Search failed on both YouTube and JioSaavn.\n\n"
+                    f"`{type(fallback_error).__name__}: {fallback_error}`"
+                )
 
         # =================================================
         # RESPONSE VALIDATION
@@ -461,7 +550,7 @@ async def search(
 
             return await send_msg.edit(
                 "❌ Invalid response received "
-                "from JioSaavn."
+                "from API."
             )
 
         buttons = []
