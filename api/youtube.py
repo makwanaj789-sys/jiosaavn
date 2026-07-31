@@ -38,8 +38,9 @@ async def download_video(query: str):
     ydl_opts = {
         'format': 'bestaudio',
         'format_sort': ['hasaud'],
+        'listformats': True,
         'outtmpl': '%(title)s.%(ext)s',
-        'quiet': True,
+        'quiet': False,
         'no_warnings': True,
         'cookiefile': cookies_path,
         'extract_flat': not download,
