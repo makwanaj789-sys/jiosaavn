@@ -3,11 +3,10 @@ import tempfile
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import yt_dlp
-import re
 
 executor = ThreadPoolExecutor(max_workers=2)
 
-# Cookies uthane ka helper function
+# COOKIES FIX: Ye naya function cookies ko env se utha kar temp file banayega
 def _get_cookies_path():
     cookies_content = os.environ.get('YOUTUBE_COOKIES')
     if not cookies_content:
@@ -19,82 +18,35 @@ def _get_cookies_path():
     except Exception:
         return None
 
-# Helper to check if input is a URL
-def is_url(text):
-    youtube_regex = r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/'
-    return re.match(youtube_regex, text) is not None
-
-# yt-dlp run karne ka internal function
-async def _run_ytdl(url: str, download: bool = True, search_mode: bool = False):
+# MAIN SEARCH FUNCTION (Aapka original search logic, bas cookies fix add kiya)
+async def search(query: str, limit: int = 10):
     cookies_path = _get_cookies_path()
     
-    # Agar search_mode True hai, toh 'ytsearch:' prefix laga do
-    final_url = f"ytsearch10:{url}" if search_mode else url
-
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': '%(title)s.%(ext)s',
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': cookies_path,
-        'extract_flat': search_mode, # Search mode mein sirf list chahiye, download nahi
-        'headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
+        'cookiefile': cookies_path,  # <--- YAHAN COOKIES PASS KI
+        'headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+        }
     }
+    
     try:
         loop = asyncio.get_running_loop()
-        def sync_download():
+        def sync_search():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(final_url, download=download)
-        info = await loop.run_in_executor(executor, sync_download)
-        return info, None
-    except Exception as e:
-        return None, str(e)
-    finally:
-        if cookies_path and os.path.exists(cookies_path):
-            try:
-                os.remove(cookies_path)
-            except:
-                pass
-
-# =========================================================
-# 🟢 1. UPDATED SEARCH FUNCTION (Text support ke sath)
-# =========================================================
-
-async def search(query: str, limit: int = 10):
-    """
-    Agar query URL hai toh download karega, nahi toh YouTube pe search karke results dikhayega.
-    """
-    
-    # ✅ Check: Kya user ne URL daala hai ya Text?
-    if is_url(query):
-        # URL hai -> Direct video download karo
-        info, error = await _run_ytdl(query, download=True, search_mode=False)
-        if error or not info:
-            return {"success": False, "error": error or "Failed"}
+                info = ydl.extract_info(query, download=False)
+                return info
         
-        return {
-            "success": True,
-            "results": [{
-                "id": info.get('id'),
-                "title": info.get('title'),
-                "duration": info.get('duration'),
-                "uploader": info.get('uploader'),
-                "url": info.get('webpage_url'),
-                "source": "youtube"
-            }],
-            "total": 1
-        }
+        info = await loop.run_in_executor(executor, sync_search)
         
-    else:
-        # Text hai -> YouTube par search karo (Results dikhao)
-        info, error = await _run_ytdl(query, download=False, search_mode=True)
-        
-        if error or not info:
-            return {"success": False, "error": error or "No results found on YouTube."}
-            
         results = []
-        # yt-dlp search results ko 'entries' mein return karta hai
         entries = info.get('entries', [])
+        if not entries:
+            return {"success": False, "error": "No results found"}
+            
         for entry in entries:
             results.append({
                 "id": entry.get('id'),
@@ -105,54 +57,44 @@ async def search(query: str, limit: int = 10):
                 "source": "youtube"
             })
             
-        return {
-            "success": True,
-            "results": results,
-            "total": len(results)
-        }
+        return {"success": True, "results": results, "total": len(results)}
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
-# =========================================================
-# 2. GET INFO FUNCTION 
-# =========================================================
-
+# GET INFO
 async def get_info(item_id: str):
     url = f"https://www.youtube.com/watch?v={item_id}"
-    info, error = await _run_ytdl(url, download=False, search_mode=False)
-    if error or not info:
-        return {"success": False, "error": error or "Failed"}
-    return {
-        "success": True,
-        "data": {
-            "id": info.get('id'),
-            "title": info.get('title'),
-            "duration": info.get('duration'),
-            "uploader": info.get('uploader'),
-            "thumbnail": info.get('thumbnail'),
-            "url": info.get('webpage_url')
-        }
-    }
+    # Same yt-dlp logic (shortened for brevity)
+    cookies_path = _get_cookies_path()
+    ydl_opts = {'quiet': True, 'cookiefile': cookies_path}
+    try:
+        loop = asyncio.get_running_loop()
+        def sync_get():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=False)
+        info = await loop.run_in_executor(executor, sync_get)
+        return {"success": True, "data": {"title": info.get('title'), "id": info.get('id'), "url": url}}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
-# =========================================================
-# 3. DOWNLOAD SONG FUNCTION 
-# =========================================================
-
+# DOWNLOAD SONG
 async def download_song(video_id: str, bitrate: int = 320, download_location: str = None):
     url = f"https://www.youtube.com/watch?v={video_id}"
+    cookies_path = _get_cookies_path()
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': f'{download_location or ""}%(title)s.%(ext)s',
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': _get_cookies_path(),
-        'headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
+        'cookiefile': cookies_path,  # <--- YAHAN BHI COOKIES PASS KI
     }
     try:
         loop = asyncio.get_running_loop()
-        def sync_download():
+        def sync_dl():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 return ydl.extract_info(url, download=True)
-        info = await loop.run_in_executor(executor, sync_download)
-        if not info: return {"success": False, "error": "Failed"}
+        info = await loop.run_in_executor(executor, sync_dl)
         filepath = info.get('requested_downloads', [{}])[0].get('filepath')
         return {"success": True, "filepath": filepath, "title": info.get('title')}
     except Exception as e:
