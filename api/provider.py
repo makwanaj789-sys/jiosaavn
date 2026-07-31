@@ -16,12 +16,17 @@ class Provider:
     # =====================================
 
     async def search(
-        self,
-        query: str,
-        page_size: int = 10
-    ) -> Any:
+    self,
+    query: str,
+    page_size: int = 10
+) -> Any:
 
-        return await self.youtube(query)
+    response = await self.youtube(query)
+
+    if not response or not response.get("success"):
+        return []
+
+    return response.get("results", [])
 
     # =====================================
     # DOWNLOAD SONG (Sirf YouTube)
