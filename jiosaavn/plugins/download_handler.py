@@ -31,7 +31,7 @@ async def download_callback(client: Bot, message: CallbackQuery):
 
         if not result or not result.get("success"):
             error_msg = result.get("error", "Unknown error")
-            await message.edit(
+            await message.message.edit_text(
                 f"❌ Download failed.\n\n**Source:** YOUTUBE\n**ID:** {video_id}\n\n`{error_msg}`"
             )
             return
