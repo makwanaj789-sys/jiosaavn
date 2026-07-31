@@ -41,7 +41,7 @@ async def handle_song_callback(
                 "❌ Invalid data received."
             )
         
-        callback_type = data_parts[0]  # song, youtube, album, playlist, artist
+        callback_type = data_parts[0]
         item_id = data_parts[1]
         
         logger.info(f"📌 Type: {callback_type}, ID: {item_id}")
@@ -60,23 +60,18 @@ async def handle_song_callback(
         
         try:
             if callback_type == "youtube":
-                # YouTube song
                 await handle_youtube_song(callback_query, engine, item_id)
                 
             elif callback_type == "song":
-                # JioSaavn song
                 await handle_jiosaavn_song(callback_query, engine, item_id)
                 
             elif callback_type == "album":
-                # Album
                 await handle_album(callback_query, engine, item_id)
                 
             elif callback_type == "playlist":
-                # Playlist
                 await handle_playlist(callback_query, engine, item_id)
                 
             elif callback_type == "artist":
-                # Artist
                 await handle_artist(callback_query, engine, item_id)
                 
             else:
@@ -229,7 +224,6 @@ async def handle_album(callback_query, engine, album_id):
                 "❌ This album could not be found."
             )
         
-        # Create album display
         title = album_data.get("title", "Unknown Album")
         artist = album_data.get("artist", "Unknown Artist")
         songs = album_data.get("songs", [])
@@ -286,7 +280,6 @@ async def handle_playlist(callback_query, engine, playlist_id):
                 "❌ This playlist could not be found."
             )
         
-        # Create playlist display
         title = playlist_data.get("title", "Unknown Playlist")
         creator = playlist_data.get("creator", "Unknown Creator")
         songs = playlist_data.get("songs", [])
@@ -343,7 +336,6 @@ async def handle_artist(callback_query, engine, artist_id):
                 "❌ This artist could not be found."
             )
         
-        # Create artist display
         name = artist_data.get("name", "Unknown Artist")
         songs = artist_data.get("songs", [])
         
@@ -397,7 +389,6 @@ def format_youtube_song(song_data):
     duration = song_data.get("duration", 0)
     thumbnail = song_data.get("thumbnail", "")
     
-    # Format duration
     if duration:
         minutes = duration // 60
         seconds = duration % 60
@@ -478,7 +469,7 @@ async def close_callback(client, callback_query):
 
 
 # =========================================================
-# DOWNLOAD HANDLER (Placeholder)
+# DOWNLOAD HANDLER
 # =========================================================
 
 @Bot.on_callback_query(filters.regex(r"^download#"))
@@ -492,7 +483,7 @@ async def download_callback(client, callback_query):
         if len(data_parts) < 3:
             return
         
-        source = data_parts[1]  # youtube or jiosaavn
+        source = data_parts[1]
         item_id = data_parts[2]
         
         await callback_query.message.edit_text(
