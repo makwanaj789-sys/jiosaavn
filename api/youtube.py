@@ -12,7 +12,7 @@ import yt_dlp
 # Ek global thread pool (aap apni requirement ke hisaab se max_workers badha sakte hain)
 executor = ThreadPoolExecutor(max_workers=2)
 
-async def download_video(url: str):
+async def search(url: str):
     """
     Main function to download video from URL using yt-dlp with Cookies support.
     """
