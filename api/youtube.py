@@ -4,32 +4,35 @@ import asyncio
 import yt_dlp
 import re
 
-# Check karo ki query URL hai ya text
 def is_url(text):
     youtube_regex = r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/'
     return re.match(youtube_regex, text) is not None
 
-# Cookies ko env se utha kar temp file banayega
 def _get_cookies_file():
     cookies_data = os.environ.get('YOUTUBE_COOKIES')
     if not cookies_data:
+        print("⚠️ YOUTUBE_COOKIES not found in environment!")
         return None
     try:
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as f:
             f.write(cookies_data)
             return f.name
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ Error creating cookies file: {e}")
         return None
 
-# Main Download / Search Function
 async def download_video(query: str):
+    print(f"🔍 DEBUG: Original query = {query}")
     cookies_path = _get_cookies_file()
     
+    # 🟢 MAGIC LOGIC: Agar URL nahi hai toh search prefix laga do
     if not is_url(query):
-        final_query = f"ytsearch20:{query}"  # Top 20 results search karega
+        final_query = f"ytsearch10:{query}"  # Top 10 results
+        print(f"🔍 DEBUG: Transformed to search query = {final_query}")
         download = False
     else:
         final_query = query
+        print(f"🔍 DEBUG: It's a URL, downloading directly.")
         download = True
     
     ydl_opts = {
@@ -39,6 +42,9 @@ async def download_video(query: str):
         'no_warnings': True,
         'cookiefile': cookies_path,
         'extract_flat': not download,
+        'headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
     }
     
     try:
@@ -50,6 +56,7 @@ async def download_video(query: str):
         
         info = await loop.run_in_executor(None, sync_download)
         
+        # URL (Direct Download)
         if download:
             filepath = None
             if info.get('requested_downloads'):
@@ -63,11 +70,15 @@ async def download_video(query: str):
                     "filepath": filepath
                 }
             }
+            
+        # Text (Search Results)
         else:
             results = []
             entries = info.get('entries', [])
             if not entries:
-                return {"success": False, "error": "No results found on YouTube"}
+                # Agar entries empty hai toh iska matlab search failed
+                print("❌ DEBUG: No entries found in YouTube response. Check logs.")
+                return {"success": False, "error": "No results found"}
             
             for entry in entries:
                 results.append({
@@ -79,9 +90,11 @@ async def download_video(query: str):
                     "source": "youtube"
                 })
             
+            print(f"✅ DEBUG: Found {len(results)} results.")
             return {"success": True, "results": results, "total": len(results)}
         
     except Exception as e:
+        print(f"❌ DEBUG: yt-dlp Exception = {e}")
         return {"success": False, "error": str(e)}
     finally:
         if cookies_path and os.path.exists(cookies_path):
