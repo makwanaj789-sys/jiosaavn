@@ -357,13 +357,15 @@ class Jiosaavn:
             "Origin": "https://www.jiosaavn.com"
         }
 
-        async with aiohttp.ClientSession() as session:
+        headers["Accept-Encoding"] = "identity"
+        timeout = aiohttp.ClientTimeout(total=300)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, headers=headers) as response:
                 response.raise_for_status()
+
                 async with aiofiles.open(download_location, "wb") as file:
-                    while True:
-                        chunk = await response.content.read(4 * 1024 * 1024)  # 4 MB chunk size
-                        if not chunk:
-                            break
-                        await file.write(chunk)
+                    async for chunk in response.content.iter_chunked(1024 * 1024):
+                        if chunk:
+                            await file.write(chunk)
         return download_location
