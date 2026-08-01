@@ -3,6 +3,7 @@ import tempfile
 import asyncio
 import yt_dlp
 import re
+import uuid
 
 def is_url(text):
     youtube_regex = r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/'
@@ -25,9 +26,10 @@ async def download_video(query: str):
     print(f"🔍 DEBUG: Original query = {query}")
     cookies_path = _get_cookies_file()
 
-    # 🟢 MAGIC LOGIC: Agar URL nahi hai toh search prefix laga do
+    # 🛠️ FIX: Search query ko clear karo taaki playlist na aaye. 
+    # "audio song" add kiya taaki sirf songs milen.
     if not is_url(query):
-        final_query = f"ytsearch10:{query}"  # Top 10 results
+        final_query = f"ytsearch10:{query} audio song"
         print(f"🔍 DEBUG: Transformed to search query = {final_query}")
         download = False
     else:
@@ -35,9 +37,11 @@ async def download_video(query: str):
         print(f"🔍 DEBUG: It's a URL, downloading directly.")
         download = True
 
-    temp_dir = tempfile.mkdtemp(prefix="ytdl_")
+    # 📁 Unique folder banayein (Conflict avoid karne ke liye)
+    temp_dir = os.path.join(tempfile.gettempdir(), f"ytdl_{uuid.uuid4().hex[:8]}")
 
     ydl_opts = {
+        # 🎯 Best audio format dhundho
         "format": "251/140/250/249/bestaudio/best",
 
         "format_sort": ["hasaud"],
@@ -65,8 +69,6 @@ async def download_video(query: str):
         def sync_download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(final_query, download=download)
-
-                print(info.get("formats"))
                 return info
 
         info = await loop.run_in_executor(None, sync_download)
