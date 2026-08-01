@@ -36,7 +36,7 @@ async def download_video(query: str):
         download = True
     
     ydl_opts = {
-        'format': 'bestaudio/best/18/best',
+        'format': 'bestaudio/best',
         'extractor_args': {
           'youtube': {
             'player_client': ['android', 'web']
