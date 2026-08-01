@@ -42,7 +42,7 @@ async def download_video(query: str):
     # ====================================================================
     ydl_opts = {
         # YouTube ko kaho ki "Jo bhi best audio ho, uske liye available format de do"
-        "format": "bestaudio/best",
+        "format": "bestaudio/best/mp4",
         
         # IMPORTANT: Extract_flat sirf search ke liye true hoga, download ke liye false
         "extract_flat": not download,
