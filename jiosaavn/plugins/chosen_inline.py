@@ -15,7 +15,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             item_id=chosen.result_id
         )
 
-        print(result)
+        print("DOWNLOAD RESULT:",result)
 
         # Yaha next step me:
         # 1. MongoDB cache check
