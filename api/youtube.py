@@ -40,14 +40,6 @@ async def download_video(query: str):
     ydl_opts = {
         "format": "251/140/250/249/bestaudio/best",
 
-        "extractor_args": {
-            "youtube": {
-                "player_client": [
-                    "web"
-                ]
-            }
-        },
-
         "format_sort": ["hasaud"],
 
         "listformats": False,
@@ -65,14 +57,6 @@ async def download_video(query: str):
         "noplaylist": True,
 
         "geo_bypass": True,
-
-        "headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/138.0.0.0 Safari/537.36"
-            )
-        }
     }
 
     try:
