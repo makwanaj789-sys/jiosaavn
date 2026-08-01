@@ -40,44 +40,66 @@ async def download_callback(client: Bot, message: CallbackQuery):
             await message.message.edit_text("❌ File path not found after download.")
             return
 
-        # =========================================================
-        # 🛠️ FIX: Check for .mp3, .m4a, OR .webm extensions
-        # =========================================================
+        # ========================================================
+        # 🔥 ULTIMATE FIX: Actual downloaded file ko dhundho
+        # ========================================================
+        
+        # 1. Folder ka path alag karo
         dir_path = os.path.dirname(original_filepath)
-        base_name_without_ext = os.path.splitext(original_filepath)[0] # .NA ya bad extension hata diya
         
-        # Check karo ki actual file kis extension mein exist karti hai
-        possible_extensions = ['.mp3', '.m4a', '.webm']
+        # 2. Filename ka base (bina extension ke) nikaalo
+        base_name_without_ext = os.path.splitext(original_filepath)[0]
+        
+        # 3. Dono check karo -> Pehle exact path, phir .webm, phir .m4a, phir .mp3
+        possible_file_paths = [
+            original_filepath, # Jo engine ne diya
+            f"{base_name_without_ext}.webm",
+            f"{base_name_without_ext}.m4a",
+            f"{base_name_without_ext}.mp3",
+            f"{base_name_without_ext}.opus"
+        ]
+        
         actual_filepath = None
-        
-        for ext in possible_extensions:
-            test_path = f"{base_name_without_ext}{ext}"
-            if os.path.exists(test_path):
-                actual_filepath = test_path
+        for path in possible_file_paths:
+            if os.path.exists(path):
+                actual_filepath = path
                 break
         
-        # Agar koi bhi extension match nahi kiya
-        if actual_filepath is None:
-            await message.message.edit_text("❌ File not found on disk (checked .mp3, .m4a, and .webm).")
+        # Agar folder mein kuch nahi mila, toh folder ka scan karo
+        if not actual_filepath and os.path.exists(dir_path):
+            for f in os.listdir(dir_path):
+                if f.lower().endswith(('.webm', '.m4a', '.mp3', '.opus')):
+                    actual_filepath = os.path.join(dir_path, f)
+                    break
+                    
+        # Agar kuch bhi nahi mila toh error do
+        if not actual_filepath:
+            await message.message.edit_text(
+                f"❌ File not found on disk.\n\n"
+                f"Checked extension: .webm, .m4a, .mp3, .opus\n"
+                f"In folder: `{dir_path}`"
+            )
             return
 
-        # Ab file path ko SAFE (ASCII) banayenge taaki upload ho sake
+        # ========================================================
+        # 🛡️ SAFE RENAME: Special characters hatao (ASCII error fix)
+        # ========================================================
         filename_with_ext = os.path.basename(actual_filepath)
-        # File name se saare special characters hatao (space, [ ], #, etc. sabko '_' se replace karo)
+        # Replace spaces, brackets, hash, pipe, etc. with underscore '_'
         safe_filename = re.sub(r'[^\w\-_\. ]', '_', filename_with_ext) 
         safe_filepath = os.path.join(dir_path, safe_filename)
 
-        # Agar safe filename original se alag hai, toh file ko rename karo
+        # Agar naam alag hai toh rename karo
         if safe_filepath != actual_filepath:
             os.rename(actual_filepath, safe_filepath)
             filepath = safe_filepath
         else:
             filepath = actual_filepath
-        # =========================================================
+        # ========================================================
 
         await message.message.edit_text(f"📤 Uploading `{title}`...")
         
-        # Safe filepath send karo
+        # Ab file upload karo
         await client.send_audio(
             chat_id=message.from_user.id,
             audio=filepath, 
@@ -87,9 +109,9 @@ async def download_callback(client: Bot, message: CallbackQuery):
 
         await message.message.delete()
 
-        # Optional: File cleanup (hatao agar jagah bachani hai)
-        # if os.path.exists(filepath):
-        #     os.remove(filepath)
+        # File cleanup (Optional: Upload ke baad file delete kar do)
+        if os.path.exists(filepath):
+            os.remove(filepath)
 
     except Exception as e:
         logger.exception(f"Download callback failed: {e}")
