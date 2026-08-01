@@ -51,7 +51,7 @@ async def download_video(query: str):
 
         "format_sort": ["hasaud"],
 
-        "listformats": False,
+        "listformats": True,
 
         "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
 
