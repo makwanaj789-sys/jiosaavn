@@ -46,6 +46,7 @@ async def download_video(query: str):
         'listformats': False,
         'outtmpl': '%(title)s.%(ext)s',
         'quiet': False,
+        'cookiefile': cookies_path,
         'no_warnings': True,
         'extract_flat': not download,
         'noplaylist': True,
