@@ -26,8 +26,7 @@ async def download_video(query: str):
     print(f"🔍 DEBUG: Original query = {query}")
     cookies_path = _get_cookies_file()
 
-    # 🛠️ FIX: Search query ko clear karo taaki playlist na aaye. 
-    # "audio song" add kiya taaki sirf songs milen.
+    # 🛠️ FIX: Search query
     if not is_url(query):
         final_query = f"ytsearch10:{query} audio song"
         print(f"🔍 DEBUG: Transformed to search query = {final_query}")
@@ -37,31 +36,41 @@ async def download_video(query: str):
         print(f"🔍 DEBUG: It's a URL, downloading directly.")
         download = True
 
-    # 📁 Unique folder banayein (Conflict avoid karne ke liye)
+    # 📁 Unique folder
     temp_dir = os.path.join(tempfile.gettempdir(), f"ytdl_{uuid.uuid4().hex[:8]}")
 
+    # ====================================================================
+    # 🚀 FIX 1 & 2: Correct Player Clients aur Browser Headers
+    # ====================================================================
     ydl_opts = {
-        # 🎯 Best audio format dhundho
-        "format": "251/140/250/249/bestaudio/best",
+        "format": "251/140/bestaudio/best",
+
+        # 🛡️ IMPORTANT: Isse 'tv downgraded player' band ho jayega
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web", "android"] 
+            }
+        },
 
         "format_sort": ["hasaud"],
-
         "listformats": False,
 
         "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
-
         "quiet": False,
-
         "cookiefile": cookies_path,
-
         "no_warnings": True,
-
-        "extract_flat": not download,
-
         "noplaylist": True,
-
         "geo_bypass": True,
+        
+        # 📱 Headers add kiye taaki YouTube ko lage real browser hai
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+
+        # 🛠️ FIX 3: Important - Extract_flat ko dynamic kiya
+        "extract_flat": not download, 
     }
+    # ====================================================================
 
     try:
         loop = asyncio.get_running_loop()
@@ -110,7 +119,7 @@ async def download_video(query: str):
             entries = info.get('entries', [])
 
             if not entries:
-                print("❌ DEBUG: No entries found in YouTube response. Check logs.")
+                print("❌ DEBUG: No entries found in YouTube response.")
                 return {"success": False, "error": "No results found"}
 
             for entry in entries:
