@@ -38,7 +38,7 @@ async def download_video(query: str):
     temp_dir = tempfile.mkdtemp(prefix="ytdl_")
 
     ydl_opts = {
-        "format": "bestaudio/best/18",
+        "format": "bestaudio/best",
 
         "extractor_args": {
             "youtube": {
