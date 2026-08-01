@@ -60,9 +60,14 @@ async def download_video(query: str):
         def sync_download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(final_query, download=False)
-                print("\n========== FORMATS ==========")
+
+                if info.get("_type") == "playlist":
+                    info = ydl.extract_info(
+                        info["entries"][0]["webpage_url"],
+                        download=False
+                    )
+
                 print(info.get("formats"))
-                print("=============================\n")
                 return info
 
         info = await loop.run_in_executor(None, sync_download)
@@ -87,7 +92,6 @@ async def download_video(query: str):
             results = []
             entries = info.get('entries', [])
             if not entries:
-                # Agar entries empty hai toh iska matlab search failed
                 print("❌ DEBUG: No entries found in YouTube response. Check logs.")
                 return {"success": False, "error": "No results found"}
 
@@ -102,7 +106,11 @@ async def download_video(query: str):
                 })
 
             print(f"✅ DEBUG: Found {len(results)} results.")
-            return {"success": True, "results": results, "total": len(results)}
+            return {
+                "success": True,
+                "results": results,
+                "total": len(results)
+            }
 
     except Exception as e:
         print(f"❌ DEBUG: yt-dlp Exception = {e}")
