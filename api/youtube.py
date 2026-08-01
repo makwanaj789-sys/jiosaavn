@@ -61,15 +61,7 @@ async def download_video(query: str):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(final_query, download=False)
 
-                if info.get("_type") == "playlist":
-                    first = info["entries"][0]
-
-                    video_url = f"https://www.youtube.com/watch?v={first['id']}"
-
-                    info = ydl.extract_info(
-                        video_url,
-                        download=False
-                    )
+                
 
                 print(info.get("formats"))
                 return info
