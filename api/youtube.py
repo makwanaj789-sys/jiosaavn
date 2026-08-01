@@ -46,7 +46,7 @@ async def download_video(query: str):
         'geo_bypass': True,
         'extract_flat': False,
         'noplaylist': True,
-
+    }
     try:
         loop = asyncio.get_running_loop()
 
