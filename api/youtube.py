@@ -62,8 +62,12 @@ async def download_video(query: str):
                 info = ydl.extract_info(final_query, download=False)
 
                 if info.get("_type") == "playlist":
+                    first = info["entries"][0]
+
+                    video_url = f"https://www.youtube.com/watch?v={first['id']}"
+
                     info = ydl.extract_info(
-                        info["entries"][0]["webpage_url"],
+                        video_url,
                         download=False
                     )
 
@@ -77,6 +81,7 @@ async def download_video(query: str):
             filepath = None
             if info.get('requested_downloads'):
                 filepath = info['requested_downloads'][0].get('filepath')
+
             return {
                 "success": True,
                 "data": {
@@ -91,6 +96,7 @@ async def download_video(query: str):
         else:
             results = []
             entries = info.get('entries', [])
+
             if not entries:
                 print("❌ DEBUG: No entries found in YouTube response. Check logs.")
                 return {"success": False, "error": "No results found"}
