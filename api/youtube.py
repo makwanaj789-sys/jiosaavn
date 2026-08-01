@@ -91,15 +91,30 @@ async def download_video(query: str):
         # URL (Direct Download)
         if download:
             filepath = None
-            if info.get('requested_downloads'):
-                filepath = info['requested_downloads'][0].get('filepath')
+
+            if info.get("requested_downloads"):
+                filepath = info["requested_downloads"][0].get("filepath")
+
+            if not filepath:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    filepath = ydl.prepare_filename(info)
+
+                if not os.path.exists(filepath):
+                    base = os.path.splitext(filepath)[0]
+                    for ext in ("webm", "m4a", "mp3", "opus"):
+                        candidate = base + "." + ext
+                        if os.path.exists(candidate):
+                            filepath = candidate
+                            break
+
+            print("FINAL FILEPATH:", filepath)
 
             return {
                 "success": True,
                 "data": {
-                    "title": info.get('title'),
-                    "duration": info.get('duration'),
-                    "uploader": info.get('uploader'),
+                    "title": info.get("title"),
+                    "duration": info.get("duration"),
+                    "uploader": info.get("uploader"),
                     "filepath": filepath
                 }
             }
