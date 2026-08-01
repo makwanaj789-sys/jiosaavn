@@ -43,7 +43,6 @@ async def download_video(query: str):
         "extractor_args": {
             "youtube": {
                 "player_client": [
-                    "android",
                     "web"
                 ]
             }
