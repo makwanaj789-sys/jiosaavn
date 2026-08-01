@@ -81,7 +81,7 @@ async def download_video(query: str):
 
         def sync_download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(final_query, download=True)
+                info = ydl.extract_info(final_query, download=download)
 
                 print(info.get("formats"))
                 return info
