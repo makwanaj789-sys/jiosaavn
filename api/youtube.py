@@ -36,24 +36,16 @@ async def download_video(query: str):
         download = True
 
     ydl_opts = {
-        'format': 'bestaudio',
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web']
-            }
-        },
-        'format_sort': ['hasaud'],
+        'format': 'bestaudio/best',
         'listformats': False,
-        'outtmpl': '%(title)s.%(ext)s',
         'quiet': False,
+        'default_search': 'ytsearch1',
+        'outtmpl': os.path.join(temp_dir, "%(title)s.%(ext)s"),
         'cookiefile': cookies_path,
         'no_warnings': True,
-        'extract_flat': not download,
+        'geo_bypass': True,
+        'extract_flat': False,
         'noplaylist': True,
-        'headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-    }
 
     try:
         loop = asyncio.get_running_loop()
