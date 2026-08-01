@@ -35,26 +35,53 @@ async def download_video(query: str):
         print(f"🔍 DEBUG: It's a URL, downloading directly.")
         download = True
 
+    temp_dir = tempfile.mkdtemp(prefix="ytdl_")
+
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'listformats': False,
-        'quiet': False,
-        'default_search': 'ytsearch1',
-        'outtmpl': os.path.join(temp_dir, "%(title)s.%(ext)s"),
-        'cookiefile': cookies_path,
-        'no_warnings': True,
-        'geo_bypass': True,
-        'extract_flat': False,
-        'noplaylist': True,
+        "format": "bestaudio/best/18",
+
+        "extractor_args": {
+            "youtube": {
+                "player_client": [
+                    "android",
+                    "web"
+                ]
+            }
+        },
+
+        "format_sort": ["hasaud"],
+
+        "listformats": False,
+
+        "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
+
+        "quiet": False,
+
+        "cookiefile": cookies_path,
+
+        "no_warnings": True,
+
+        "extract_flat": not download,
+
+        "noplaylist": True,
+
+        "geo_bypass": True,
+
+        "headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/138.0.0.0 Safari/537.36"
+            )
+        }
     }
+
     try:
         loop = asyncio.get_running_loop()
 
         def sync_download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(final_query, download=True)
-
-                
 
                 print(info.get("formats"))
                 return info
