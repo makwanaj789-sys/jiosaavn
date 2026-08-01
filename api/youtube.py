@@ -26,9 +26,8 @@ async def download_video(query: str):
     print(f"🔍 DEBUG: Original query = {query}")
     cookies_path = _get_cookies_file()
 
-    # 🛠️ FIX: Search query
     if not is_url(query):
-        final_query = f"ytsearch10:{query} audio song"
+        final_query = f"ytsearch10:{query}"
         print(f"🔍 DEBUG: Transformed to search query = {final_query}")
         download = False
     else:
@@ -36,39 +35,37 @@ async def download_video(query: str):
         print(f"🔍 DEBUG: It's a URL, downloading directly.")
         download = True
 
-    # 📁 Unique folder
     temp_dir = os.path.join(tempfile.gettempdir(), f"ytdl_{uuid.uuid4().hex[:8]}")
 
     # ====================================================================
-    # 🚀 FIX 1 & 2: Correct Player Clients aur Browser Headers
+    # 🚀 FINAL ULTIMATE FIX (YouTube Naye Endpoints)
     # ====================================================================
     ydl_opts = {
-        "format": "251/140/bestaudio/best",
+        # YouTube ko kaho ki "Jo bhi best audio ho, uske liye available format de do"
+        "format": "bestaudio/best",
+        
+        # IMPORTANT: Extract_flat sirf search ke liye true hoga, download ke liye false
+        "extract_flat": not download,
 
-        # 🛡️ IMPORTANT: Isse 'tv downgraded player' band ho jayega
+        "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
+
+        # POINT 1: 'web' client force karo, 'tv' client bahut purana hai
         "extractor_args": {
             "youtube": {
-                "player_client": ["web", "android"] 
+                "player_client": ["web", "android", "ios"]
             }
         },
 
-        "format_sort": ["hasaud"],
-        "listformats": False,
+        # POINT 2: Use modern iOS headers to prevent "Format not available"
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+        },
 
-        "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
         "quiet": False,
         "cookiefile": cookies_path,
         "no_warnings": True,
         "noplaylist": True,
         "geo_bypass": True,
-        
-        # 📱 Headers add kiye taaki YouTube ko lage real browser hai
-        "headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        },
-
-        # 🛠️ FIX 3: Important - Extract_flat ko dynamic kiya
-        "extract_flat": not download, 
     }
     # ====================================================================
 
@@ -82,7 +79,6 @@ async def download_video(query: str):
 
         info = await loop.run_in_executor(None, sync_download)
 
-        # URL (Direct Download)
         if download:
             filepath = None
 
@@ -113,13 +109,12 @@ async def download_video(query: str):
                 }
             }
 
-        # Text (Search Results)
         else:
             results = []
             entries = info.get('entries', [])
 
             if not entries:
-                print("❌ DEBUG: No entries found in YouTube response.")
+                print("❌ DEBUG: No entries found.")
                 return {"success": False, "error": "No results found"}
 
             for entry in entries:
