@@ -12,16 +12,24 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
     try:
         print(f"INLINE CLICKED ID: {chosen.result_id}")
 
+        # 🔥 Agar ID hi nahi hai toh wapas bhejo (Playlist case handle)
+        if not chosen.result_id:
+            await client.send_message(
+                chat_id=chosen.from_user.id,
+                text="❌ Invalid Selection. Please try another song."
+            )
+            return
+
         engine = SearchEngine()
         
-        # 🟢 1. Download call karo
+        # 1. Download call karo
         result = await engine.download_song(item_id=chosen.result_id)
 
         if not result or not result.get("success"):
             error_msg = result.get("error", "Unknown error")
             await client.send_message(
                 chat_id=chosen.from_user.id,
-                text=f"❌ Download failed for inline selection.\n\n`{error_msg}`"
+                text=f"❌ Download failed.\n\n`{error_msg}`"
             )
             return
 
@@ -36,40 +44,46 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             )
             return
 
-        # 🔥 2. File dhundho (Same logic as download_handler)
+        # ========================================================
+        # 🔥 COPY OF DOWNLOAD_HANDLER LOGIC: File ko dhundho
+        # ========================================================
         dir_path = os.path.dirname(original_filepath)
-        base_name = os.path.splitext(original_filepath)[0]
-        possible_files = [
+        base_name_without_ext = os.path.splitext(original_filepath)[0]
+        
+        possible_file_paths = [
             original_filepath,
-            f"{base_name}.webm",
-            f"{base_name}.m4a",
-            f"{base_name}.mp3",
-            f"{base_name}.opus"
+            f"{base_name_without_ext}.webm",
+            f"{base_name_without_ext}.m4a",
+            f"{base_name_without_ext}.mp3",
+            f"{base_name_without_ext}.opus"
         ]
         
         actual_filepath = None
-        for path in possible_files:
+        for path in possible_file_paths:
             if os.path.exists(path):
                 actual_filepath = path
                 break
         
-        # Folder scan
+        # Agar folder mein kuch nahi mila, toh folder ka scan karo
         if not actual_filepath and os.path.exists(dir_path):
             for f in os.listdir(dir_path):
                 if f.lower().endswith(('.webm', '.m4a', '.mp3', '.opus')):
                     actual_filepath = os.path.join(dir_path, f)
                     break
-
+                    
+        # Agar kuch bhi nahi mila toh error do
         if not actual_filepath:
             await client.send_message(
                 chat_id=chosen.from_user.id,
-                text=f"❌ File not found on disk in `{dir_path}`"
+                text=f"❌ File not found on disk.\nIn folder: `{dir_path}`"
             )
             return
 
-        # 🛡️ 3. Safe Rename (Fix ASCII error)
-        filename = os.path.basename(actual_filepath)
-        safe_filename = re.sub(r'[^\w\-_\. ]', '_', filename)
+        # ========================================================
+        # 🛡️ SAFE RENAME: Special characters hatao (ASCII error fix)
+        # ========================================================
+        filename_with_ext = os.path.basename(actual_filepath)
+        safe_filename = re.sub(r'[^\w\-_\. ]', '_', filename_with_ext) 
         safe_filepath = os.path.join(dir_path, safe_filename)
 
         if safe_filepath != actual_filepath:
@@ -77,8 +91,9 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             filepath = safe_filepath
         else:
             filepath = actual_filepath
+        # ========================================================
 
-        # 🟢 4. USER KO DIRECT DM MEIN FILE BHEJO
+        # 2. USER KO DIRECT DM MEIN FILE BHEJO
         await client.send_audio(
             chat_id=chosen.from_user.id,
             audio=filepath,
@@ -89,10 +104,6 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             ])
         )
 
-        # 🟢 5. Telegram ko batado ki process complete hai (Blank answer)
-        # Note: Telegram allow karta hai 'chosen_inline_result' ko bina reply kare, 
-        # lekin humne DM bhej diya hai toh user confuse nahi hoga.
-        
         # Cleanup file
         if os.path.exists(filepath):
             os.remove(filepath)
