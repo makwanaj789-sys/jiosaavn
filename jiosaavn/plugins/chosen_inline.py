@@ -15,16 +15,26 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         logger.info(f"👤 USER: {chosen.from_user.id}")
         logger.info(f"📝 QUERY: {chosen.query}")
         
-        # 🔥 Agar ID hi nahi hai toh wapas bhejo
-        if not chosen.result_id:
-            logger.warning("⚠️ NO RESULT ID")
+        # 🔥 FIX: Result ID se video ID extract karo
+        result_id = chosen.result_id
+        
+        # Agar result_id "yt_" se start ho toh video ID extract karo
+        if result_id.startswith("yt_"):
+            video_id = result_id.split("_")[1]
+            logger.info(f"🔑 EXTRACTED VIDEO ID: {video_id}")
+        else:
+            video_id = result_id
+            logger.info(f"🔑 USING RAW ID: {video_id}")
+        
+        if not video_id:
+            logger.warning("⚠️ NO VIDEO ID")
             await client.send_message(
                 chat_id=chosen.from_user.id,
                 text="❌ Invalid Selection. Please try another song."
             )
             return
 
-        # User ko batao ke download start ho gaya
+        # User ko batao
         status_msg = await client.send_message(
             chat_id=chosen.from_user.id,
             text=f"⏳ Downloading your song... Please wait."
@@ -32,13 +42,20 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
 
         engine = SearchEngine()
         
-        # 1. Download call karo
-        logger.info(f"📥 DOWNLOADING: {chosen.result_id}")
-        result = await engine.download_song(item_id=chosen.result_id)
+        # 🔥 FIX: Video ID se download karo
+        logger.info(f"📥 DOWNLOADING: {video_id}")
+        result = await engine.download_song(item_id=video_id)
 
         if not result or not result.get("success"):
             error_msg = result.get("error", "Unknown error")
             logger.error(f"❌ DOWNLOAD FAILED: {error_msg}")
+            
+            # 🔥 FIX: Better error message
+            if "ffmpeg" in error_msg.lower():
+                error_msg = "FFmpeg not installed. Please install FFmpeg."
+            elif "cookies" in error_msg.lower():
+                error_msg = "YouTube cookies required. Please set YOUTUBE_COOKIES."
+            
             await status_msg.edit_text(
                 text=f"❌ Download failed.\n\n`{error_msg}`"
             )
@@ -56,7 +73,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             return
 
         # ========================================================
-        # 🔥 FILE KO DHUNDHO
+        # FILE KO DHUNDHO
         # ========================================================
         dir_path = os.path.dirname(original_filepath)
         base_name_without_ext = os.path.splitext(original_filepath)[0]
@@ -76,7 +93,6 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
                 logger.info(f"✅ FILE FOUND: {path}")
                 break
         
-        # Agar folder mein kuch nahi mila, toh folder ka scan karo
         if not actual_filepath and os.path.exists(dir_path):
             logger.info(f"🔍 SCANNING FOLDER: {dir_path}")
             for f in os.listdir(dir_path):
@@ -85,16 +101,15 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
                     logger.info(f"✅ FILE FOUND IN FOLDER: {f}")
                     break
                     
-        # Agar kuch bhi nahi mila toh error do
         if not actual_filepath:
-            logger.error(f"❌ FILE NOT FOUND IN: {dir_path}")
+            logger.error(f"❌ FILE NOT FOUND")
             await status_msg.edit_text(
-                text=f"❌ File not found on disk.\nIn folder: `{dir_path}`"
+                text=f"❌ File not found on disk.\nFolder: `{dir_path}`"
             )
             return
 
         # ========================================================
-        # 🛡️ SAFE RENAME: Special characters hatao
+        # SAFE RENAME
         # ========================================================
         filename_with_ext = os.path.basename(actual_filepath)
         safe_filename = re.sub(r'[^\w\-_\. ]', '_', filename_with_ext) 
@@ -106,33 +121,46 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             logger.info(f"✅ RENAMED TO: {safe_filename}")
         else:
             filepath = actual_filepath
-        # ========================================================
 
-        # 2. USER KO DIRECT DM MEIN FILE BHEJO
+        # ========================================================
+        # FILE UPLOAD
+        # ========================================================
         logger.info(f"📤 UPLOADING: {title}")
         await status_msg.edit_text(
             text=f"📤 Uploading `{title}`..."
         )
         
-        await client.send_audio(
-            chat_id=chosen.from_user.id,
-            audio=filepath,
-            title=title,
-            performer="YouTube",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
-            ])
-        )
+        # 🔥 FIX: Try send_audio with different parameters
+        try:
+            await client.send_audio(
+                chat_id=chosen.from_user.id,
+                audio=filepath,
+                title=title,
+                performer="YouTube",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
+                ])
+            )
+        except Exception as upload_error:
+            logger.error(f"❌ UPLOAD ERROR: {upload_error}")
+            # Try with different method
+            await client.send_document(
+                chat_id=chosen.from_user.id,
+                document=filepath,
+                caption=f"🎵 {title}",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
+                ])
+            )
 
-        # Status message delete karo
         await status_msg.delete()
 
-        # Cleanup file
+        # Cleanup
         if os.path.exists(filepath):
             os.remove(filepath)
-            logger.info(f"🧹 FILE DELETED: {filepath}")
+            logger.info(f"🧹 FILE DELETED")
 
-        logger.info(f"✅ SONG SENT SUCCESSFULLY: {title}")
+        logger.info(f"✅ SONG SENT SUCCESSFULLY")
 
     except Exception as e:
         logger.error(f"❌ CHOSEN INLINE ERROR: {e}")
