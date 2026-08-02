@@ -62,9 +62,7 @@ async def inline_search(client, inline_query: InlineQuery):
                     dur_str = "N/A"
                 
                 if video_id:
-                    # 🔥 FIX: Unique ID banao
-                    unique_id = f"yt_{video_id}_{idx}"
-                    
+                    # 🔥 SIMPLE ID - No prefix
                     results.append(
                         InlineQueryResultArticle(
                             title=f"🎵 {title[:60]}",
@@ -79,7 +77,7 @@ async def inline_search(client, inline_query: InlineQuery):
                                 [InlineKeyboardButton("⏳ Downloading...", callback_data=f"dl_{video_id}")],
                                 [InlineKeyboardButton("🔄 Search Again", switch_inline_query_current_chat="")]
                             ]),
-                            id=unique_id  # 🔥 Unique ID use karo
+                            id=video_id  # 🔥 SIMPLE ID - SIRF VIDEO ID
                         )
                     )
         
