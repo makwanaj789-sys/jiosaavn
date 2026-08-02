@@ -10,6 +10,9 @@ from api.search_engine import SearchEngine
 
 logger = logging.getLogger(__name__)
 
+print("✅ chosen_inline.py LOADED")
+logger.info("✅ chosen_inline.py LOADED")
+
 @Bot.on_chosen_inline_result()
 async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
     print("🔥 CHOSEN EVENT RECEIVED")
