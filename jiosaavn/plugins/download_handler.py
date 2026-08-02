@@ -36,11 +36,11 @@ async def download_callback(client: Bot, callback: CallbackQuery):
         status_msg = None
         if callback.message:
             status_msg = callback.message
-            await status_msg.edit_text("⏳ Downloading audio from YouTube... Please wait.")
+            await status_msg.edit_text("🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬...")
         else:
             status_msg = await client.send_message(
                 chat_id=callback.from_user.id,
-                text="⏳ Downloading audio from YouTube... Please wait."
+                text="🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬..."
             )
 
         engine = SearchEngine()
@@ -113,7 +113,7 @@ async def download_callback(client: Bot, callback: CallbackQuery):
         # UPLOAD
         # ========================================================
         if status_msg:
-            await status_msg.edit_text(f"📤 Uploading `{title}`...")
+            await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`...")
         
         await client.send_audio(
             chat_id=callback.from_user.id,
