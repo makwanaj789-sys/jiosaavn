@@ -1,120 +1,149 @@
+import os
+import tempfile
+import asyncio
+import yt_dlp
+import re
+import uuid
 import logging
-from typing import Dict, List, Any, Optional
-
-# Hum provider ko direct import karenge
-from api.provider import Provider
 
 logger = logging.getLogger(__name__)
 
+def is_url(text):
+    youtube_regex = r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/'
+    return re.match(youtube_regex, text) is not None
+
 class SearchEngine:
-
     def __init__(self):
-        self.provider = Provider()
-
-    # ==========================================
-    # SEARCH (Only YouTube)
-    # ==========================================
-
-    async def search(
-        self,
-        query: str,
-        search_type: str = "songs",
-        page_no: int = 1,
-        page_size: int = 10
-    ):
-
-        # SIRF YOUTUBE SEARCH KARO
-        result = await self.provider.search(
-            query=query,
-            page_size=page_size
-        )
-
-        # Agar result None ya list nahi hai toh empty return karo
-        if not result or not isinstance(result, list):
-            return {
-                "results": [],
-                "total": 0
-            }
-
-        # YouTube results ko normalize karo
-        data = self._normalize_youtube(result)
-
-        return {
-            "results": data,
-            "total": len(data)
+        self.ydl_opts_search = {
+            "format": "bestaudio/best",
+            "noplaylist": True,
+            "quiet": True,
+            "default_search": "ytsearch10",  # 10 results
+            "geo_bypass": True,
+            "extract_flat": True,  # Fast search
+            "skip_download": True,
+        }
+        
+        self.ydl_opts_download = {
+            "format": "bestaudio/best",
+            "noplaylist": True,
+            "quiet": True,
+            "geo_bypass": True,
+            "extract_flat": False,
+            "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }],
         }
 
-    # ==========================================
-    # NORMALIZE YOUTUBE (Format conversion)
-    # ==========================================
-
-    def _normalize_youtube(
-        self,
-        results: List[Dict]
-    ) -> List[Dict]:
-        """YouTube results ko JioSaavn format mein convert karein taaki buttons theek dikhein."""
-        
-        if not results:
-            return []
-
-        data = []
-
-        for item in results:
-            if not item:
-                continue
-
-            video_id = item.get("id")
-            if not video_id:
-                continue
-
-            title = item.get("title", "Unknown Title")
-            artist = item.get("uploader", "Unknown Artist")
-            duration = item.get("duration", 0)
-            
-            if duration:
-                minutes = duration // 60
-                seconds = duration % 60
-                duration_str = f"{minutes}:{seconds:02d}"
+    async def search(self, query: str, search_type: str = "songs", page_size: int = 10):
+        """
+        Search for songs on YouTube
+        Returns 10 results by default
+        """
+        try:
+            if not is_url(query):
+                final_query = f"ytsearch{page_size}:{query}"  # 10 results
             else:
-                duration_str = "N/A"
+                final_query = query
 
-            thumbnail = item.get("thumbnail", "")
-            perma_url = f"https://youtu.be/{video_id}"
+            loop = asyncio.get_running_loop()
+            
+            def sync_search():
+                with yt_dlp.YoutubeDL(self.ydl_opts_search) as ydl:
+                    info = ydl.extract_info(final_query, download=False)
+                    return info
 
-            data.append({
-                "id": video_id,
-                "title": title,
-                "artist": artist,
-                "name": artist,
-                "duration": duration,
-                "duration_str": duration_str,
-                "thumbnail": thumbnail,
-                "url": perma_url,
-                "perma_url": perma_url,
-                "source": "youtube",  # Force source as YouTube
-                "type": "song",
-                "more_info": {
-                    "album": artist,
-                    "duration": duration_str,
-                    "year": "YouTube"
+            info = await loop.run_in_executor(None, sync_search)
+
+            if not info:
+                return {"results": [], "total": 0}
+
+            # Handle search results
+            if "entries" in info:
+                entries = info.get("entries", [])
+                results = []
+                
+                for entry in entries:
+                    if entry:
+                        results.append({
+                            "id": entry.get("id"),
+                            "title": entry.get("title", "Unknown"),
+                            "duration": entry.get("duration", 0),
+                            "uploader": entry.get("uploader", "Unknown Artist"),
+                            "url": f"https://www.youtube.com/watch?v={entry.get('id')}",
+                            "source": "youtube"
+                        })
+                
+                return {
+                    "results": results,
+                    "total": len(results)
                 }
-            })
+            else:
+                # Single result
+                return {
+                    "results": [{
+                        "id": info.get("id"),
+                        "title": info.get("title", "Unknown"),
+                        "duration": info.get("duration", 0),
+                        "uploader": info.get("uploader", "Unknown Artist"),
+                        "url": f"https://www.youtube.com/watch?v={info.get('id')}",
+                        "source": "youtube"
+                    }],
+                    "total": 1
+                }
 
-        return data
+        except Exception as e:
+            logger.error(f"Search error: {e}")
+            return {"results": [], "total": 0, "error": str(e)}
 
-    # ==========================================
-    # DOWNLOAD SONG (Only YouTube)
-    # ==========================================
+    async def download_song(self, item_id: str):
+        """
+        Download song from YouTube using video ID
+        """
+        try:
+            url = f"https://www.youtube.com/watch?v={item_id}"
+            
+            loop = asyncio.get_running_loop()
+            
+            def sync_download():
+                with yt_dlp.YoutubeDL(self.ydl_opts_download) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    return info
 
-    async def download_song(
-        self,
-        item_id: str,
-        bitrate: int = 320,
-        download_location: str = None
-    ) -> Optional[str]:
-        
-        return await self.provider.download_song(
-            item_id=item_id,
-            bitrate=bitrate,
-            download_location=download_location
-        )
+            info = await loop.run_in_executor(None, sync_download)
+
+            if not info:
+                return {"success": False, "error": "No info found"}
+
+            # Get filepath
+            filepath = None
+            if info.get("requested_downloads"):
+                filepath = info["requested_downloads"][0].get("filepath")
+            
+            if not filepath:
+                filepath = ydl.prepare_filename(info)
+                
+                # Check with different extensions
+                base = os.path.splitext(filepath)[0]
+                for ext in [".mp3", ".webm", ".m4a", ".opus"]:
+                    candidate = base + ext
+                    if os.path.exists(candidate):
+                        filepath = candidate
+                        break
+
+            return {
+                "success": True,
+                "data": {
+                    "title": info.get("title", "Unknown"),
+                    "duration": info.get("duration", 0),
+                    "uploader": info.get("uploader", "Unknown"),
+                    "filepath": filepath
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Download error: {e}")
+            return {"success": False, "error": str(e)}
