@@ -8,7 +8,7 @@ from pyrogram.types import ChosenInlineResult, InlineKeyboardMarkup, InlineKeybo
 from jiosaavn.bot import Bot
 from api.search_engine import SearchEngine
 from api.cache import CacheManager
-from jiosaavn.database import db
+
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         )
 
         engine = SearchEngine()
-        cache = CacheManager(db)
+        cache = CacheManager(client.db)
         
         # ==========================================
         # CACHE CHECK
