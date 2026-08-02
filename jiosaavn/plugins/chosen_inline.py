@@ -1,3 +1,5 @@
+# jiosaavn/plugins/chosen_inline.py
+
 import os
 import re
 import logging
@@ -11,9 +13,13 @@ logger = logging.getLogger(__name__)
 @Bot.on_chosen_inline_result()
 async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
     try:
+        # 🔥 YEH LOG SABSE IMPORTANT HAI
+        logger.info("=" * 50)
+        logger.info("🎯 CHOSEN INLINE TRIGGERED!")
         logger.info(f"✅ CHOSEN INLINE RESULT: {chosen.result_id}")
         logger.info(f"👤 USER: {chosen.from_user.id}")
         logger.info(f"📝 QUERY: {chosen.query}")
+        logger.info("=" * 50)
         
         # 🔥 VIDEO ID EXTRACT
         video_id = chosen.result_id
@@ -60,7 +66,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             return
 
         # ========================================================
-        # FILE FINDING LOGIC (Same as download_handler)
+        # FILE FINDING LOGIC
         # ========================================================
         dir_path = os.path.dirname(original_filepath)
         base_name_without_ext = os.path.splitext(original_filepath)[0]
@@ -94,7 +100,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             return
 
         # ========================================================
-        # SAFE RENAME (Same as download_handler)
+        # SAFE RENAME
         # ========================================================
         filename_with_ext = os.path.basename(actual_filepath)
         safe_filename = re.sub(r'[^\w\-_\. ]', '_', filename_with_ext) 
@@ -107,7 +113,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             filepath = actual_filepath
 
         # ========================================================
-        # UPLOAD (Same as download_handler)
+        # UPLOAD
         # ========================================================
         await status_msg.edit_text(f"📤 Uploading `{title}`...")
         
