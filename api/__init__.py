@@ -1,22 +1,15 @@
-# handlers/__init__.py
+# api/__init__.py
 
-from . import commands
-from . import download_handler
-from . import search_handler
-from . import text
-from . import inline
-from . import chosen_inline
+# 🔥 Sirf wahi import karo jo exist karte hain
+from . import search_engine
+from . import youtube
+from . import provider  # Agar provider.py hai toh
 
-# 🔥 Youtube api folder mein hai toh alag se import
-# from api import youtube  # Agar api folder mein hai
+# Agar admin file nahi hai toh yeh line hatao
+# from . import admin  # ❌ REMOVE
 
 __all__ = [
-    'admin',
-    'commands',
-    'download_handler',
-    'search_handler',
-    'text',
-    'inline',
-    'chosen_inline',
-    # 'youtube'  # Comment karo agar api folder mein hai
+    'search_engine',
+    'youtube',
+    'provider',  # Agar hai toh
 ]
