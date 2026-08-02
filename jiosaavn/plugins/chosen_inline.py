@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 @Bot.on_chosen_inline_result()
 async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
+    print("🔥 CHOSEN EVENT RECEIVED")
+    logger.info("🔥 CHOSEN EVENT RECEIVED")
     try:
         # 🔥 YEH LOG SABSE IMPORTANT HAI
         logger.info("=" * 50)
