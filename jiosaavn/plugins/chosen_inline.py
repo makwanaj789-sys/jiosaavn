@@ -72,19 +72,19 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
                 title=cached.get("title", "Unknown"),
                 performer=cached.get("uploader", "YouTube"),
                 reply_markup=InlineKeyboardMarkup([
-    [
-        InlineKeyboardButton(
-            "🎵 Search Again",
-            switch_inline_query_current_chat=""
-        )
-    ],
-    [
-        InlineKeyboardButton(
-            "🤖 𝐀м𝓊ᔕ𝕀¢",
-            url="https://t.me/aartimusic_bot?start=home"
-        )
-    ]
-])
+                    [
+                        InlineKeyboardButton(
+                            "🎵 Search Again",
+                            switch_inline_query_current_chat=""
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🤖 𝐀м𝓊ᔕ𝕀¢",
+                            url="https://t.me/aartimusic_bot?start=home"
+                        )
+                    ]
+                ])
             )
 
             await status_msg.delete()
@@ -182,7 +182,16 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
                     duration=data.get("duration", 0),
                     uploader=data.get("uploader", "YouTube")
                 )
-                logger.info("💾 Saved to cache")
+                saved = await cache.save(
+                    video_id=video_id,
+                    file_id=sent.audio.file_id,
+                    title=title,
+                    duration=data.get("duration", 0),
+                    uploader=data.get("uploader", "YouTube")
+                )
+                if saved:
+                    logger.info("💾 Saved to cache")
+           
         except Exception as e:
             logger.error(f"Cache save failed: {e}")
         
