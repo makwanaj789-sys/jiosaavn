@@ -1,3 +1,5 @@
+# jiosaavn/plugins/inline.py
+
 import logging
 import traceback
 from pyrogram.types import (
@@ -63,6 +65,8 @@ async def inline_search(client, inline_query: InlineQuery):
                 
                 if video_id:
                     # 🔥 SIMPLE ID - Sirf video_id
+                    logger.info(f"📌 Adding result: {video_id} - {title[:30]}")
+                    
                     results.append(
                         InlineQueryResultArticle(
                             title=f"🎵 {title[:60]}",
