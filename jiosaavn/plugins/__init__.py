@@ -1,23 +1,28 @@
-# handlers/__init__.py
+# jiosaavn/plugins/__init__.py
 
+"""
+Plugins Package - Sabhi Bot Handlers
+"""
+
+# 🔥 SABHI FILES IMPORT KARO
 from . import admin
+from . import chosen_inline
 from . import commands
 from . import download_handler
+from . import inline
 from . import search_handler
 from . import text
 
-# 🔥 YEH DO LINE ADD KARO - Inline handlers ke liye
-from . import inline
-from . import chosen_inline
-
-# 🔥 YEH LINE BHI ADD KARO (agar api folder hai toh)
-from . import youtube  # Agar youtube.py handlers mein hai toh
-
+# 🔥 SABHI FILES KO __all__ MEIN ADD KARO
 __all__ = [
+    'admin',
+    'chosen_inline',
     'commands',
     'download_handler',
+    'inline',
     'search_handler',
-    'inline',        # ✅ ADD
-    'chosen_inline', # ✅ ADD
-    'youtube'        # ✅ ADD (agar zaroorat ho)
+    'text',
 ]
+
+# Debug ke liye (optional)
+print(f"✅ Plugins loaded: {', '.join(__all__)}")
