@@ -5,7 +5,6 @@ import re
 import logging
 import traceback
 from pyrogram.types import ChosenInlineResult, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.enums import ChatType
 from jiosaavn.bot import Bot
 from api.search_engine import SearchEngine
 from api.cache import CacheManager
@@ -27,18 +26,26 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         logger.info(f"✅ CHOSEN INLINE RESULT: {chosen.result_id}")
         logger.info(f"👤 USER: {chosen.from_user.id}")
         logger.info(f"📝 QUERY: {chosen.query}")
-        
-        # 🔥 FIX: Get the actual chat where inline search was performed
-        # Pyrogram stores the chat in the 'chat' attribute of ChosenInlineResult
-        if hasattr(chosen, 'chat') and chosen.chat:
-            chat_id = chosen.chat.id
-            logger.info(f"💬 CHAT FROM ATTR: {chat_id} (Type: {chosen.chat.type})")
-        else:
-            # Fallback: user ki DM
-            chat_id = chosen.from_user.id
-            logger.info(f"💬 FALLBACK TO USER DM: {chat_id}")
-        
+        logger.info(f"🆔 INLINE MESSAGE ID: {chosen.inline_message_id}")
         logger.info("=" * 50)
+        
+        # 🔥 FIX: Agar inline_message_id hai toh group/chat hai, warna private chat
+        if chosen.inline_message_id:
+            # Group/Channel/Supergroup mein inline search
+            # Inline message ID se chat ID extract karo
+            try:
+                # Inline message ID format: "AAAAAA_BBBBBB" ya similar
+                # Pehle part se chat ID milti hai
+                chat_id = int(chosen.inline_message_id.split('_')[0])
+                logger.info(f"📢 GROUP CHAT ID: {chat_id}")
+            except:
+                # Agar extract nahi ho paaye toh user ki DM
+                chat_id = chosen.from_user.id
+                logger.info(f"💬 FALLBACK TO USER DM: {chat_id}")
+        else:
+            # Private chat mein inline search
+            chat_id = chosen.from_user.id
+            logger.info(f"💬 PRIVATE CHAT: {chat_id}")
         
         # 🔥 VIDEO ID EXTRACT
         video_id = chosen.result_id
@@ -60,7 +67,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         # 🔥 SAME AS DOWNLOAD_HANDLER LOGIC
         # ========================================================
         
-        # User ko batao (usi chat mein)
+        # User ko batao
         status_msg = await client.send_message(
             chat_id=chat_id,
             text="🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬..."
@@ -79,7 +86,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             logger.info(f"⚡ CACHE HIT: {video_id}")
 
             await client.send_audio(
-                chat_id=chat_id,  # 🔥 USI CHAT MEIN BHEJO
+                chat_id=chat_id,
                 audio=cached["file_id"],
                 title=cached.get("title", "Unknown"),
                 performer=cached.get("uploader", "YouTube"),
@@ -167,12 +174,12 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             filepath = actual_filepath
 
         # ========================================================
-        # UPLOAD - USI CHAT MEIN
+        # UPLOAD
         # ========================================================
         await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`...")
         
         sent = await client.send_audio(
-            chat_id=chat_id,  # 🔥 USI CHAT MEIN BHEJO
+            chat_id=chat_id,
             audio=filepath,
             title=title,
             performer="YouTube",
