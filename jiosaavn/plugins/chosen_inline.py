@@ -26,16 +26,24 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         logger.info(f"✅ CHOSEN INLINE RESULT: {chosen.result_id}")
         logger.info(f"👤 USER: {chosen.from_user.id}")
         logger.info(f"📝 QUERY: {chosen.query}")
-        logger.info(f"💬 CHAT ID: {chosen.chat_instance}")  # Ye group/chat ID hai
+        logger.info(f"🆔 INLINE MESSAGE ID: {chosen.inline_message_id}")
         logger.info("=" * 50)
         
-        # 🔥 IMPORTANT: Sender chat ID (group ya private chat)
-        # chosen.chat_instance mein group/chat ID aati hai
-        chat_id = chosen.chat_instance
-        
-        # Agar chat_instance 0 hai toh user ki private chat hai
-        if chat_id == 0:
+        # 🔥 IMPORTANT: Inline message ID use karo
+        # Agar inline_message_id hai toh group/chat hai, warna private chat
+        if chosen.inline_message_id:
+            # Group/Channel/Supergroup me inline search
+            # Isme hum user ko DM me status bhej sakte hain aur group me final song
+            chat_id = chosen.from_user.id  # Status ke liye user ki DM
+            is_group = True
+            inline_msg_id = chosen.inline_message_id
+            logger.info(f"📢 GROUP INLINE SEARCH - Inline ID: {inline_msg_id}")
+        else:
+            # Private chat me inline search
             chat_id = chosen.from_user.id
+            is_group = False
+            inline_msg_id = None
+            logger.info(f"💬 PRIVATE CHAT INLINE SEARCH")
         
         # 🔥 VIDEO ID EXTRACT
         video_id = chosen.result_id
@@ -57,7 +65,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         # 🔥 SAME AS DOWNLOAD_HANDLER LOGIC
         # ========================================================
         
-        # User ko batao (iss chat me bhejo)
+        # User ko batao
         status_msg = await client.send_message(
             chat_id=chat_id,
             text="🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬..."
@@ -75,26 +83,60 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         if cached:
             logger.info(f"⚡ CACHE HIT: {video_id}")
 
-            await client.send_audio(
-                chat_id=chat_id,  # 🔥 Group/chat me bhejo
-                audio=cached["file_id"],
-                title=cached.get("title", "Unknown"),
-                performer=cached.get("uploader", "YouTube"),
-                reply_markup=InlineKeyboardMarkup([
-                    [
-                        InlineKeyboardButton(
-                            "🎵 Search Again",
-                            switch_inline_query_current_chat=""
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "🤖 𝐀м𝓊ᔕ𝕀¢",
-                            url="https://t.me/aartimusic_bot?start=home"
-                        )
-                    ]
-                ])
-            )
+            if is_group and inline_msg_id:
+                # Group me inline message ko edit karo
+                await client.edit_inline_text(
+                    inline_message_id=inline_msg_id,
+                    text=f"🎵 **{cached.get('title', 'Unknown')}**\n\n"
+                         f"✅ Downloading from cache...",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("⏳ Processing...", callback_data="none")]
+                    ])
+                )
+                
+                # Group me audio send karo
+                await client.send_audio(
+                    chat_id=chosen.from_user.id,  # User ki DM me bhejo
+                    audio=cached["file_id"],
+                    title=cached.get("title", "Unknown"),
+                    performer=cached.get("uploader", "YouTube"),
+                    reply_markup=InlineKeyboardMarkup([
+                        [
+                            InlineKeyboardButton(
+                                "🎵 Search Again",
+                                switch_inline_query_current_chat=""
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                "🤖 𝐀м𝓊ᔕ𝕀¢",
+                                url="https://t.me/aartimusic_bot?start=home"
+                            )
+                        ]
+                    ])
+                )
+            else:
+                # Private chat me direct send
+                await client.send_audio(
+                    chat_id=chat_id,
+                    audio=cached["file_id"],
+                    title=cached.get("title", "Unknown"),
+                    performer=cached.get("uploader", "YouTube"),
+                    reply_markup=InlineKeyboardMarkup([
+                        [
+                            InlineKeyboardButton(
+                                "🎵 Search Again",
+                                switch_inline_query_current_chat=""
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                "🤖 𝐀м𝓊ᔕ𝕀¢",
+                                url="https://t.me/aartimusic_bot?start=home"
+                            )
+                        ]
+                    ])
+                )
 
             await status_msg.delete()
             return
@@ -103,9 +145,16 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
 
         if not result or not result.get("success"):
             error_msg = result.get("error", "Unknown error")
-            await status_msg.edit_text(
-                f"❌ Download failed.\n\n**Source:** YOUTUBE\n**ID:** {video_id}\n\n`{error_msg}`"
-            )
+            
+            if is_group and inline_msg_id:
+                await client.edit_inline_text(
+                    inline_message_id=inline_msg_id,
+                    text=f"❌ Download failed.\n\n**Source:** YOUTUBE\n**ID:** {video_id}\n\n`{error_msg}`"
+                )
+            else:
+                await status_msg.edit_text(
+                    f"❌ Download failed.\n\n**Source:** YOUTUBE\n**ID:** {video_id}\n\n`{error_msg}`"
+                )
             return
 
         data = result.get("data", {})
@@ -113,7 +162,13 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         original_filepath = data.get("filepath")
 
         if not original_filepath:
-            await status_msg.edit_text("❌ File path not found after download.")
+            if is_group and inline_msg_id:
+                await client.edit_inline_text(
+                    inline_message_id=inline_msg_id,
+                    text="❌ File path not found after download."
+                )
+            else:
+                await status_msg.edit_text("❌ File path not found after download.")
             return
 
         # ========================================================
@@ -143,11 +198,14 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
                     break
                     
         if not actual_filepath:
-            await status_msg.edit_text(
-                f"❌ File not found on disk.\n\n"
-                f"Checked extension: .webm, .m4a, .mp3, .opus\n"
-                f"In folder: `{dir_path}`"
-            )
+            error_text = f"❌ File not found on disk.\n\nChecked extension: .webm, .m4a, .mp3, .opus\nIn folder: `{dir_path}`"
+            if is_group and inline_msg_id:
+                await client.edit_inline_text(
+                    inline_message_id=inline_msg_id,
+                    text=error_text
+                )
+            else:
+                await status_msg.edit_text(error_text)
             return
 
         # ========================================================
@@ -166,17 +224,46 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         # ========================================================
         # UPLOAD
         # ========================================================
-        await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`...")
         
-        sent = await client.send_audio(
-            chat_id=chat_id,  # 🔥 Group/chat me bhejo
-            audio=filepath,
-            title=title,
-            performer="YouTube",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
-            ])
-        )
+        if is_group and inline_msg_id:
+            # Group me inline message update karo
+            await client.edit_inline_text(
+                inline_message_id=inline_msg_id,
+                text=f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`..."
+            )
+            
+            # User ki DM me audio bhejo
+            sent = await client.send_audio(
+                chat_id=chosen.from_user.id,
+                audio=filepath,
+                title=title,
+                performer="YouTube",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
+                ])
+            )
+            
+            # Group me final message
+            await client.edit_inline_text(
+                inline_message_id=inline_msg_id,
+                text=f"✅ **{title}**\n\n🎵 Song sent to your DM!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📥 Download", callback_data=f"download_{video_id}")]
+                ])
+            )
+        else:
+            # Private chat me direct bhejo
+            await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`...")
+            
+            sent = await client.send_audio(
+                chat_id=chat_id,
+                audio=filepath,
+                title=title,
+                performer="YouTube",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
+                ])
+            )
         
         # ==========================================
         # SAVE CACHE
