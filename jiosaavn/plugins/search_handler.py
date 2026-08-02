@@ -36,7 +36,7 @@ async def search(client: Bot, message: Message):
 
         send_msg = await message.reply("__**Searching YouTube... ⏳**__", quote=True)
 
-        # Search karo
+        # Search karo - Same method inline mein bhi use hogi
         engine = SearchEngine()
         response = await engine.search(query)
 
