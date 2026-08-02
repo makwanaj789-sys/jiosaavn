@@ -51,7 +51,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         # User ko batao
         status_msg = await client.send_message(
             chat_id=chosen.from_user.id,
-            text="⏳ Downloading audio from YouTube... Please wait."
+            text="🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬..."
         )
 
         engine = SearchEngine()
@@ -151,7 +151,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         # ========================================================
         # UPLOAD
         # ========================================================
-        await status_msg.edit_text(f"📤 Uploading `{title}`...")
+        await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`...")
         
         sent = await client.send_audio(
             chat_id=chosen.from_user.id,
