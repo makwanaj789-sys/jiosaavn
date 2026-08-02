@@ -39,7 +39,7 @@ async def download_callback(client: Bot, callback: CallbackQuery):
             await status_msg.edit_text("🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬...")
         else:
             status_msg = await client.send_message(
-                chat_id=callback.from_user.id,
+                chat_id=callback.message.chat.id,
                 text="🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬..."
             )
 
@@ -116,7 +116,7 @@ async def download_callback(client: Bot, callback: CallbackQuery):
             await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`...")
         
         await client.send_audio(
-            chat_id=callback.from_user.id,
+            chat_id=callback.message.chat.id,
             audio=filepath,
             title=title,
             performer="YouTube",
