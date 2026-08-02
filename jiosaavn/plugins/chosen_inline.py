@@ -80,7 +80,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
     ],
     [
         InlineKeyboardButton(
-            "🤖 Open Aarti",
+            "🤖 𝐀м𝓊ᔕ𝕀¢",
             url="https://t.me/aartimusic_bot?start=home"
         )
     ]
