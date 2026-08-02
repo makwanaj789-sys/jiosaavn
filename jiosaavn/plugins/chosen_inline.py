@@ -15,16 +15,15 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         logger.info(f"👤 USER: {chosen.from_user.id}")
         logger.info(f"📝 QUERY: {chosen.query}")
         
-        # 🔥 FIX: Result ID se video ID extract karo
-        result_id = chosen.result_id
+        # 🔥 SIMPLE VIDEO ID - Direct use karo
+        video_id = chosen.result_id
         
-        # Agar result_id "yt_" se start ho toh video ID extract karo
-        if result_id.startswith("yt_"):
-            video_id = result_id.split("_")[1]
+        # Agar "yt_" prefix hai toh hatao
+        if video_id.startswith("yt_"):
+            video_id = video_id.split("_")[1]
             logger.info(f"🔑 EXTRACTED VIDEO ID: {video_id}")
         else:
-            video_id = result_id
-            logger.info(f"🔑 USING RAW ID: {video_id}")
+            logger.info(f"🔑 USING VIDEO ID: {video_id}")
         
         if not video_id:
             logger.warning("⚠️ NO VIDEO ID")
@@ -42,7 +41,6 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
 
         engine = SearchEngine()
         
-        # 🔥 FIX: Video ID se download karo
         logger.info(f"📥 DOWNLOADING: {video_id}")
         result = await engine.download_song(item_id=video_id)
 
@@ -50,7 +48,6 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             error_msg = result.get("error", "Unknown error")
             logger.error(f"❌ DOWNLOAD FAILED: {error_msg}")
             
-            # 🔥 FIX: Better error message
             if "ffmpeg" in error_msg.lower():
                 error_msg = "FFmpeg not installed. Please install FFmpeg."
             elif "cookies" in error_msg.lower():
@@ -130,32 +127,18 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             text=f"📤 Uploading `{title}`..."
         )
         
-        # 🔥 FIX: Try send_audio with different parameters
-        try:
-            await client.send_audio(
-                chat_id=chosen.from_user.id,
-                audio=filepath,
-                title=title,
-                performer="YouTube",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
-                ])
-            )
-        except Exception as upload_error:
-            logger.error(f"❌ UPLOAD ERROR: {upload_error}")
-            # Try with different method
-            await client.send_document(
-                chat_id=chosen.from_user.id,
-                document=filepath,
-                caption=f"🎵 {title}",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
-                ])
-            )
+        await client.send_audio(
+            chat_id=chosen.from_user.id,
+            audio=filepath,
+            title=title,
+            performer="YouTube",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
+            ])
+        )
 
         await status_msg.delete()
 
-        # Cleanup
         if os.path.exists(filepath):
             os.remove(filepath)
             logger.info(f"🧹 FILE DELETED")
