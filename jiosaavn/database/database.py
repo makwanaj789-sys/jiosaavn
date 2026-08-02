@@ -29,6 +29,12 @@ class Database:
         # Groups where bot has been used
         self.group_collection = self.stats_db.groups
 
+        # =====================================================
+        # MUSIC CACHE DATABASE
+        # =====================================================
+
+        self.cache_db = self._client["jiosaavnV2_cache"]
+        self.music_cache = self.cache_db.music_cache
 
     # =========================================================
     # USER DATABASE
@@ -53,7 +59,6 @@ class Database:
             }
         }
 
-
     async def is_user_exist(self, user_id: int) -> bool:
         """
         Checks if a user exists in the database.
@@ -65,7 +70,6 @@ class Database:
 
         return bool(user)
 
-
     async def add_user(self, user_id: int):
         """
         Adds a new user to the database.
@@ -76,7 +80,6 @@ class Database:
         await self.user_collection.insert_one(user)
 
         return user
-
 
     async def get_user(self, user_id: int) -> dict:
         """
@@ -91,7 +94,6 @@ class Database:
             user = await self.add_user(user_id)
 
         return user
-
 
     async def update_user(
         self,
@@ -111,7 +113,6 @@ class Database:
                 }
             }
         )
-
 
     # =========================================================
     # SONG DATABASE
@@ -141,7 +142,6 @@ class Database:
 
         return bool(item)
 
-
     async def get_song(
         self,
         song_id: str
@@ -155,7 +155,6 @@ class Database:
         )
 
         return song
-
 
     async def update_song(
         self,
@@ -179,7 +178,6 @@ class Database:
                 "$set": update_fields
             }
         )
-
 
     # =========================================================
     # SEARCH ANALYTICS
@@ -207,7 +205,6 @@ class Database:
             }
         )
 
-
     # =========================================================
     # GROUP TRACKING
     # =========================================================
@@ -234,7 +231,6 @@ class Database:
             },
             upsert=True
         )
-
 
     # =========================================================
     # ADMIN STATISTICS
