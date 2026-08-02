@@ -72,13 +72,19 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
                 title=cached.get("title", "Unknown"),
                 performer=cached.get("uploader", "YouTube"),
                 reply_markup=InlineKeyboardMarkup([
-                    [
-                        InlineKeyboardButton(
-                            "🎵 Search Again",
-                            switch_inline_query_current_chat=""
-                        )
-                    ]
-                ])
+    [
+        InlineKeyboardButton(
+            "🎵 Search Again",
+            switch_inline_query_current_chat=""
+        )
+    ],
+    [
+        InlineKeyboardButton(
+            "🤖 Open Aarti",
+            url="https://t.me/YourBotUsername?start=home"
+        )
+    ]
+])
             )
 
             await status_msg.delete()
