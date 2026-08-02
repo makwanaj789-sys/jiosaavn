@@ -15,15 +15,13 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         logger.info(f"👤 USER: {chosen.from_user.id}")
         logger.info(f"📝 QUERY: {chosen.query}")
         
-        # 🔥 SIMPLE VIDEO ID - Direct use karo
+        # 🔥 SIMPLE VIDEO ID - Direct use karo (same as download_handler)
         video_id = chosen.result_id
         
         # Agar "yt_" prefix hai toh hatao
         if video_id.startswith("yt_"):
             video_id = video_id.split("_")[1]
             logger.info(f"🔑 EXTRACTED VIDEO ID: {video_id}")
-        else:
-            logger.info(f"🔑 USING VIDEO ID: {video_id}")
         
         if not video_id:
             logger.warning("⚠️ NO VIDEO ID")
@@ -33,28 +31,20 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             )
             return
 
-        # User ko batao
+        # User ko batao (same as download_handler)
         status_msg = await client.send_message(
             chat_id=chosen.from_user.id,
-            text=f"⏳ Downloading your song... Please wait."
+            text="⏳ Downloading audio from YouTube... Please wait."
         )
 
+        # 🔥 SAME LOGIC AS DOWNLOAD_HANDLER
         engine = SearchEngine()
-        
-        logger.info(f"📥 DOWNLOADING: {video_id}")
-        result = await engine.download_song(item_id=video_id)
+        result = await engine.download_song(video_id)
 
         if not result or not result.get("success"):
             error_msg = result.get("error", "Unknown error")
-            logger.error(f"❌ DOWNLOAD FAILED: {error_msg}")
-            
-            if "ffmpeg" in error_msg.lower():
-                error_msg = "FFmpeg not installed. Please install FFmpeg."
-            elif "cookies" in error_msg.lower():
-                error_msg = "YouTube cookies required. Please set YOUTUBE_COOKIES."
-            
             await status_msg.edit_text(
-                text=f"❌ Download failed.\n\n`{error_msg}`"
+                f"❌ Download failed.\n\n**Source:** YOUTUBE\n**ID:** {video_id}\n\n`{error_msg}`"
             )
             return
 
@@ -63,14 +53,11 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         original_filepath = data.get("filepath")
 
         if not original_filepath:
-            logger.error("❌ NO FILEPATH")
-            await status_msg.edit_text(
-                text="❌ File path not found after download."
-            )
+            await status_msg.edit_text("❌ File path not found after download.")
             return
 
         # ========================================================
-        # FILE KO DHUNDHO
+        # 🔥 SAME FILE FINDING LOGIC AS DOWNLOAD_HANDLER
         # ========================================================
         dir_path = os.path.dirname(original_filepath)
         base_name_without_ext = os.path.splitext(original_filepath)[0]
@@ -87,26 +74,24 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         for path in possible_file_paths:
             if os.path.exists(path):
                 actual_filepath = path
-                logger.info(f"✅ FILE FOUND: {path}")
                 break
         
         if not actual_filepath and os.path.exists(dir_path):
-            logger.info(f"🔍 SCANNING FOLDER: {dir_path}")
             for f in os.listdir(dir_path):
                 if f.lower().endswith(('.webm', '.m4a', '.mp3', '.opus')):
                     actual_filepath = os.path.join(dir_path, f)
-                    logger.info(f"✅ FILE FOUND IN FOLDER: {f}")
                     break
                     
         if not actual_filepath:
-            logger.error(f"❌ FILE NOT FOUND")
             await status_msg.edit_text(
-                text=f"❌ File not found on disk.\nFolder: `{dir_path}`"
+                f"❌ File not found on disk.\n\n"
+                f"Checked extension: .webm, .m4a, .mp3, .opus\n"
+                f"In folder: `{dir_path}`"
             )
             return
 
         # ========================================================
-        # SAFE RENAME
+        # 🛡️ SAFE RENAME (Same as download_handler)
         # ========================================================
         filename_with_ext = os.path.basename(actual_filepath)
         safe_filename = re.sub(r'[^\w\-_\. ]', '_', filename_with_ext) 
@@ -115,17 +100,13 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         if safe_filepath != actual_filepath:
             os.rename(actual_filepath, safe_filepath)
             filepath = safe_filepath
-            logger.info(f"✅ RENAMED TO: {safe_filename}")
         else:
             filepath = actual_filepath
 
         # ========================================================
-        # FILE UPLOAD
+        # 📤 UPLOAD (Same as download_handler)
         # ========================================================
-        logger.info(f"📤 UPLOADING: {title}")
-        await status_msg.edit_text(
-            text=f"📤 Uploading `{title}`..."
-        )
+        await status_msg.edit_text(f"📤 Uploading `{title}`...")
         
         await client.send_audio(
             chat_id=chosen.from_user.id,
@@ -141,9 +122,8 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
 
         if os.path.exists(filepath):
             os.remove(filepath)
-            logger.info(f"🧹 FILE DELETED")
 
-        logger.info(f"✅ SONG SENT SUCCESSFULLY")
+        logger.info(f"✅ SONG SENT SUCCESSFULLY: {title}")
 
     except Exception as e:
         logger.error(f"❌ CHOSEN INLINE ERROR: {e}")
