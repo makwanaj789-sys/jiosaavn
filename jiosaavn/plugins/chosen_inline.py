@@ -56,6 +56,34 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
 
         engine = SearchEngine()
         cache = CacheManager(db)
+        
+        # ==========================================
+        # CACHE CHECK
+        # ==========================================
+        
+        cached = await cache.get(video_id)
+
+        if cached:
+            logger.info(f"⚡ CACHE HIT: {video_id}")
+
+            await client.send_audio(
+                chat_id=chosen.from_user.id,
+                audio=cached["file_id"],
+                title=cached.get("title", "Unknown"),
+                performer=cached.get("uploader", "YouTube"),
+                reply_markup=InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton(
+                            "🎵 Search Again",
+                            switch_inline_query_current_chat=""
+                        )
+                    ]
+                ])
+            )
+
+            await status_msg.delete()
+            return
+        
         result = await engine.download_song(video_id)
 
         if not result or not result.get("success"):
@@ -123,9 +151,9 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         # ========================================================
         # UPLOAD
         # ========================================================
-        sent = await status_msg.edit_text(f"📤 Uploading `{title}`...")
+        await status_msg.edit_text(f"📤 Uploading `{title}`...")
         
-        await client.send_audio(
+        sent = await client.send_audio(
             chat_id=chosen.from_user.id,
             audio=filepath,
             title=title,
@@ -134,7 +162,24 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
                 [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
             ])
         )
-
+        
+        # ==========================================
+        # SAVE CACHE
+        # ==========================================
+        
+        try:
+            if sent and sent.audio:
+                await cache.save(
+                    video_id=video_id,
+                    file_id=sent.audio.file_id,
+                    title=title,
+                    duration=data.get("duration", 0),
+                    uploader=data.get("uploader", "YouTube")
+                )
+                logger.info("💾 Saved to cache")
+        except Exception as e:
+            logger.error(f"Cache save failed: {e}")
+        
         await status_msg.delete()
 
         if os.path.exists(filepath):
