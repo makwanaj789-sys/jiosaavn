@@ -55,6 +55,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         )
 
         engine = SearchEngine()
+        cache = CacheManager(db)
         result = await engine.download_song(video_id)
 
         if not result or not result.get("success"):
