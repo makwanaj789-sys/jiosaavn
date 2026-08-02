@@ -21,6 +21,8 @@ group_search_filter = (filters.command("am") & filters.incoming)
 
 @Bot.on_message(private_search_filter | group_search_filter)
 async def search(client: Bot, message: Message):
+    if message.via_bot:
+       return
     send_msg = None
     try:
         # Query extract karo
