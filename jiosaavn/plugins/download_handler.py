@@ -121,8 +121,19 @@ async def download_callback(client: Bot, callback: CallbackQuery):
             title=title,
             performer="YouTube",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
-            ])
+    [
+        InlineKeyboardButton(
+            "🎵 Search Again",
+            switch_inline_query_current_chat=""
+        )
+    ],
+    [
+        InlineKeyboardButton(
+            "🤖 𝐀м𝓊ᔕ𝕀¢",
+            url="https://t.me/aartimusic_bot?start=home"
+        )
+    ]
+])
         )
 
         if status_msg:
