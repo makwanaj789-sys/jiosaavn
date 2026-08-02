@@ -175,13 +175,6 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         
         try:
             if sent and sent.audio:
-                await cache.save(
-                    video_id=video_id,
-                    file_id=sent.audio.file_id,
-                    title=title,
-                    duration=data.get("duration", 0),
-                    uploader=data.get("uploader", "YouTube")
-                )
                 saved = await cache.save(
                     video_id=video_id,
                     file_id=sent.audio.file_id,
