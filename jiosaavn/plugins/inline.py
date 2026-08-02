@@ -48,7 +48,7 @@ async def inline_search(client, inline_query: InlineQuery):
             search_results = response.get("results", [])
             logger.info(f"✅ FOUND {len(search_results)} RESULTS")
             
-            for idx, result in enumerate(search_results):
+            for result in search_results:
                 title = result.get("title", "Unknown")
                 artist = result.get("uploader", "Unknown Artist")
                 video_id = result.get("id")
@@ -62,7 +62,6 @@ async def inline_search(client, inline_query: InlineQuery):
                     dur_str = "N/A"
                 
                 if video_id:
-                    # 🔥 SIMPLE ID - No prefix
                     results.append(
                         InlineQueryResultArticle(
                             title=f"🎵 {title[:60]}",
@@ -73,11 +72,7 @@ async def inline_search(client, inline_query: InlineQuery):
                                 f"**⏱ Duration:** {dur_str}\n\n"
                                 f"⬇️ Click to download..."
                             ),
-                            reply_markup=InlineKeyboardMarkup([
-                                [InlineKeyboardButton("⏳ Downloading...", callback_data=f"dl_{video_id}")],
-                                [InlineKeyboardButton("🔄 Search Again", switch_inline_query_current_chat="")]
-                            ]),
-                            id=video_id  # 🔥 SIMPLE ID - SIRF VIDEO ID
+                            id=video_id  # 🔥 SIMPLE VIDEO ID
                         )
                     )
         
