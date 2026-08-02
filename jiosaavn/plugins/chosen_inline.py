@@ -7,6 +7,8 @@ import traceback
 from pyrogram.types import ChosenInlineResult, InlineKeyboardMarkup, InlineKeyboardButton
 from jiosaavn.bot import Bot
 from api.search_engine import SearchEngine
+from api.cache import CacheManager
+from jiosaavn.database import db
 
 logger = logging.getLogger(__name__)
 
