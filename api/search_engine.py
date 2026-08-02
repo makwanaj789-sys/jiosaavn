@@ -12,16 +12,41 @@ def is_url(text):
     youtube_regex = r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/'
     return re.match(youtube_regex, text) is not None
 
+def _get_cookies_file():
+    """Create cookies file from environment variable"""
+    cookies_data = os.environ.get('YOUTUBE_COOKIES')
+    if not cookies_data:
+        logger.warning("⚠️ YOUTUBE_COOKIES not found in environment!")
+        return None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode='w',
+            encoding='utf-8',
+            delete=False,
+            suffix='.txt'
+        ) as f:
+            f.write(cookies_data)
+            logger.info("✅ Cookies file created successfully")
+            return f.name
+    except Exception as e:
+        logger.error(f"⚠️ Error creating cookies file: {e}")
+        return None
+
 class SearchEngine:
     def __init__(self):
+        # 🔥 COOKIES SUPPORT ADD KARO
+        self.cookies_path = _get_cookies_file()
+        
         self.ydl_opts_search = {
             "format": "bestaudio/best",
             "noplaylist": True,
             "quiet": True,
-            "default_search": "ytsearch10",  # 10 results
+            "default_search": "ytsearch10",
             "geo_bypass": True,
-            "extract_flat": True,  # Fast search
+            "extract_flat": True,
             "skip_download": True,
+            "cookiefile": self.cookies_path,  # 🔥 COOKIES ADD
         }
         
         self.ydl_opts_download = {
@@ -31,12 +56,15 @@ class SearchEngine:
             "geo_bypass": True,
             "extract_flat": False,
             "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
+            "cookiefile": self.cookies_path,  # 🔥 COOKIES ADD
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
                 "preferredquality": "192",
             }],
         }
+        
+        logger.info(f"✅ SearchEngine initialized with cookies: {self.cookies_path is not None}")
 
     async def search(self, query: str, search_type: str = "songs", page_size: int = 10):
         """
@@ -45,7 +73,7 @@ class SearchEngine:
         """
         try:
             if not is_url(query):
-                final_query = f"ytsearch{page_size}:{query}"  # 10 results
+                final_query = f"ytsearch{page_size}:{query}"
             else:
                 final_query = query
 
@@ -61,7 +89,6 @@ class SearchEngine:
             if not info:
                 return {"results": [], "total": 0}
 
-            # Handle search results
             if "entries" in info:
                 entries = info.get("entries", [])
                 results = []
@@ -82,7 +109,6 @@ class SearchEngine:
                     "total": len(results)
                 }
             else:
-                # Single result
                 return {
                     "results": [{
                         "id": info.get("id"),
@@ -118,7 +144,6 @@ class SearchEngine:
             if not info:
                 return {"success": False, "error": "No info found"}
 
-            # Get filepath
             filepath = None
             if info.get("requested_downloads"):
                 filepath = info["requested_downloads"][0].get("filepath")
@@ -126,7 +151,6 @@ class SearchEngine:
             if not filepath:
                 filepath = ydl.prepare_filename(info)
                 
-                # Check with different extensions
                 base = os.path.splitext(filepath)[0]
                 for ext in [".mp3", ".webm", ".m4a", ".opus"]:
                     candidate = base + ext
@@ -147,3 +171,12 @@ class SearchEngine:
         except Exception as e:
             logger.error(f"Download error: {e}")
             return {"success": False, "error": str(e)}
+            
+    def __del__(self):
+        """Cleanup cookies file on object destruction"""
+        if self.cookies_path and os.path.exists(self.cookies_path):
+            try:
+                os.remove(self.cookies_path)
+                logger.info("🧹 Cookies file cleaned up")
+            except:
+                pass
