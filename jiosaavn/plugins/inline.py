@@ -1,5 +1,3 @@
-# jiosaavn/plugins/inline.py
-
 import logging
 import traceback
 from pyrogram.types import (
@@ -50,7 +48,7 @@ async def inline_search(client, inline_query: InlineQuery):
             search_results = response.get("results", [])
             logger.info(f"✅ FOUND {len(search_results)} RESULTS")
             
-            for idx, result in enumerate(search_results):
+            for result in search_results:
                 title = result.get("title", "Unknown")
                 artist = result.get("uploader", "Unknown Artist")
                 video_id = result.get("id")
@@ -64,9 +62,7 @@ async def inline_search(client, inline_query: InlineQuery):
                     dur_str = "N/A"
                 
                 if video_id:
-                    # 🔥 SIMPLE ID - Sirf video_id
-                    logger.info(f"📌 Adding result: {video_id} - {title[:30]}")
-                    
+                    # 🔥 FIX: Callback data ko download_handler ke hisaab se set karo
                     results.append(
                         InlineQueryResultArticle(
                             title=f"🎵 {title[:60]}",
@@ -77,7 +73,18 @@ async def inline_search(client, inline_query: InlineQuery):
                                 f"**⏱ Duration:** {dur_str}\n\n"
                                 f"⬇️ Click to download..."
                             ),
-                            id=video_id  # 🔥 SIRF VIDEO ID
+                            # 🔥 FIX: Yeh callback data download_handler trigger karega
+                            reply_markup=InlineKeyboardMarkup([
+                                [InlineKeyboardButton(
+                                    "📥 Download",
+                                    callback_data=f"youtube#{video_id}"  # 🔥 YEH SAHI HAI
+                                )],
+                                [InlineKeyboardButton(
+                                    "🔄 Search Again",
+                                    switch_inline_query_current_chat=""
+                                )]
+                            ]),
+                            id=video_id
                         )
                     )
         
