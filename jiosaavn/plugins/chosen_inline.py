@@ -26,7 +26,16 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         logger.info(f"✅ CHOSEN INLINE RESULT: {chosen.result_id}")
         logger.info(f"👤 USER: {chosen.from_user.id}")
         logger.info(f"📝 QUERY: {chosen.query}")
+        logger.info(f"💬 CHAT ID: {chosen.chat_instance}")  # Ye group/chat ID hai
         logger.info("=" * 50)
+        
+        # 🔥 IMPORTANT: Sender chat ID (group ya private chat)
+        # chosen.chat_instance mein group/chat ID aati hai
+        chat_id = chosen.chat_instance
+        
+        # Agar chat_instance 0 hai toh user ki private chat hai
+        if chat_id == 0:
+            chat_id = chosen.from_user.id
         
         # 🔥 VIDEO ID EXTRACT
         video_id = chosen.result_id
@@ -39,7 +48,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         if not video_id:
             logger.warning("⚠️ NO VIDEO ID")
             await client.send_message(
-                chat_id=chosen.from_user.id,
+                chat_id=chat_id,
                 text="❌ Invalid Selection. Please try another song."
             )
             return
@@ -48,9 +57,9 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         # 🔥 SAME AS DOWNLOAD_HANDLER LOGIC
         # ========================================================
         
-        # User ko batao
+        # User ko batao (iss chat me bhejo)
         status_msg = await client.send_message(
-            chat_id=chosen.from_user.id,
+            chat_id=chat_id,
             text="🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬..."
         )
 
@@ -67,7 +76,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
             logger.info(f"⚡ CACHE HIT: {video_id}")
 
             await client.send_audio(
-                chat_id=chosen.from_user.id,
+                chat_id=chat_id,  # 🔥 Group/chat me bhejo
                 audio=cached["file_id"],
                 title=cached.get("title", "Unknown"),
                 performer=cached.get("uploader", "YouTube"),
@@ -160,7 +169,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`...")
         
         sent = await client.send_audio(
-            chat_id=chosen.from_user.id,
+            chat_id=chat_id,  # 🔥 Group/chat me bhejo
             audio=filepath,
             title=title,
             performer="YouTube",
@@ -175,6 +184,13 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         
         try:
             if sent and sent.audio:
+                await cache.save(
+                    video_id=video_id,
+                    file_id=sent.audio.file_id,
+                    title=title,
+                    duration=data.get("duration", 0),
+                    uploader=data.get("uploader", "YouTube")
+                )
                 saved = await cache.save(
                     video_id=video_id,
                     file_id=sent.audio.file_id,
@@ -200,7 +216,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         logger.error(traceback.format_exc())
         try:
             await client.send_message(
-                chat_id=chosen.from_user.id,
+                chat_id=chat_id if 'chat_id' in locals() else chosen.from_user.id,
                 text=f"❌ Error: `{type(e).__name__}: {e}`"
             )
         except:
