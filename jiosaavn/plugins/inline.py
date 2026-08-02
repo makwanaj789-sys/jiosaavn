@@ -48,7 +48,7 @@ async def inline_search(client, inline_query: InlineQuery):
             search_results = response.get("results", [])
             logger.info(f"✅ FOUND {len(search_results)} RESULTS")
             
-            for result in search_results:
+            for idx, result in enumerate(search_results):
                 title = result.get("title", "Unknown")
                 artist = result.get("uploader", "Unknown Artist")
                 video_id = result.get("id")
@@ -62,7 +62,7 @@ async def inline_search(client, inline_query: InlineQuery):
                     dur_str = "N/A"
                 
                 if video_id:
-                    # 🔥 FIX: Download handler ke callback data ke saath
+                    # 🔥 SIMPLE ID - Sirf video_id
                     results.append(
                         InlineQueryResultArticle(
                             title=f"🎵 {title[:60]}",
@@ -73,18 +73,7 @@ async def inline_search(client, inline_query: InlineQuery):
                                 f"**⏱ Duration:** {dur_str}\n\n"
                                 f"⬇️ Click to download..."
                             ),
-                            # 🔥 Callback data jo download_handler trigger karega
-                            reply_markup=InlineKeyboardMarkup([
-                                [InlineKeyboardButton(
-                                    "📥 Download",
-                                    callback_data=f"youtube#{video_id}"  # 🔥 Same as normal search
-                                )],
-                                [InlineKeyboardButton(
-                                    "🔄 Search Again",
-                                    switch_inline_query_current_chat=""
-                                )]
-                            ]),
-                            id=video_id
+                            id=video_id  # 🔥 SIRF VIDEO ID
                         )
                     )
         
