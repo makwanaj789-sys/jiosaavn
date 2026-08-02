@@ -1,8 +1,8 @@
 import logging
 import traceback
 from pyrogram.types import (
-    InlineQuery, 
-    InlineQueryResultArticle, 
+    InlineQuery,
+    InlineQueryResultArticle,
     InputTextMessageContent,
     InlineKeyboardMarkup,
     InlineKeyboardButton
