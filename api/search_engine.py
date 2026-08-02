@@ -12,32 +12,9 @@ def is_url(text):
     youtube_regex = r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/'
     return re.match(youtube_regex, text) is not None
 
-def _get_cookies_file():
-    """Create cookies file from environment variable"""
-    cookies_data = os.environ.get('YOUTUBE_COOKIES')
-    if not cookies_data:
-        logger.warning("⚠️ YOUTUBE_COOKIES not found in environment!")
-        return None
-
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode='w',
-            encoding='utf-8',
-            delete=False,
-            suffix='.txt'
-        ) as f:
-            f.write(cookies_data)
-            logger.info("✅ Cookies file created successfully")
-            return f.name
-    except Exception as e:
-        logger.error(f"⚠️ Error creating cookies file: {e}")
-        return None
-
 class SearchEngine:
     def __init__(self):
-        # 🔥 COOKIES SUPPORT ADD KARO
-        self.cookies_path = _get_cookies_file()
-        
+        # 🔥 COOKIES HATAO - Normal download_handler se kaam karega
         self.ydl_opts_search = {
             "format": "bestaudio/best",
             "noplaylist": True,
@@ -46,7 +23,6 @@ class SearchEngine:
             "geo_bypass": True,
             "extract_flat": True,
             "skip_download": True,
-            "cookiefile": self.cookies_path,  # 🔥 COOKIES ADD
         }
         
         self.ydl_opts_download = {
@@ -56,15 +32,12 @@ class SearchEngine:
             "geo_bypass": True,
             "extract_flat": False,
             "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
-            "cookiefile": self.cookies_path,  # 🔥 COOKIES ADD
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
                 "preferredquality": "192",
             }],
         }
-        
-        logger.info(f"✅ SearchEngine initialized with cookies: {self.cookies_path is not None}")
 
     async def search(self, query: str, search_type: str = "songs", page_size: int = 10):
         """
@@ -171,12 +144,3 @@ class SearchEngine:
         except Exception as e:
             logger.error(f"Download error: {e}")
             return {"success": False, "error": str(e)}
-            
-    def __del__(self):
-        """Cleanup cookies file on object destruction"""
-        if self.cookies_path and os.path.exists(self.cookies_path):
-            try:
-                os.remove(self.cookies_path)
-                logger.info("🧹 Cookies file cleaned up")
-            except:
-                pass
