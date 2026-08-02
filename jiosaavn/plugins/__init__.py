@@ -12,6 +12,8 @@ from . import download_handler
 from . import inline
 from . import search_handler
 from . import text
+from . import inline_query
+from . import download_callback
 
 # 🔥 SABHI FILES KO __all__ MEIN ADD KARO
 __all__ = [
@@ -22,6 +24,8 @@ __all__ = [
     'inline',
     'search_handler',
     'text',
+    'inline_query',
+    'download_callback',
 ]
 
 # Debug ke liye (optional)
