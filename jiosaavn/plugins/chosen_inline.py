@@ -123,7 +123,7 @@ async def chosen_inline(client: Bot, chosen: ChosenInlineResult):
         # ========================================================
         # UPLOAD
         # ========================================================
-        await status_msg.edit_text(f"📤 Uploading `{title}`...")
+        sent = await status_msg.edit_text(f"📤 Uploading `{title}`...")
         
         await client.send_audio(
             chat_id=chosen.from_user.id,
