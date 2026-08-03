@@ -45,9 +45,12 @@ async def build_result(helper, song):
             id=f"cached_{song['id']}",
             audio_file_id=cache["file_id"],
             caption=f"🎵 {cache['title']}",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔍 Search Again", switch_inline_query_current_chat="")
+            ]])
         )
 
-    # Non-cached -> placeholder, chosen_inline_result handler baad me download karega
+    # Non-cached -> placeholder, chosen_inline_result handler karega download
     return InlineQueryResultArticle(
         id=f"dl_{song['id']}",
         title=song["title"],
