@@ -37,7 +37,7 @@ async def cached_result(song, cache):
 async def build_result(helper, song):
 
     try:
-        cache = await helper.get_or_create(song["id"])
+        cache = await helper.get_cached(song["id"])
     except Exception as e:
         logger.exception(e)
         cache = None
