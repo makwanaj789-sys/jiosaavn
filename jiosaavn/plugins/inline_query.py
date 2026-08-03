@@ -96,7 +96,7 @@ results = await asyncio.gather(
 )
 
     await inline_query.answer(
-        results,
+        results=results
         cache_time=5,
         is_personal=True,
     )
