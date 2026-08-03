@@ -35,22 +35,27 @@ async def cached_result(song, cache):
         )
     )
 async def build_result(helper, song):
-
     try:
         cache = await helper.get_cached(song["id"])
-    except Exception as e:
-        logger.exception(e)
+    except Exception:
         cache = None
 
-    if not cache:
-        return InlineQueryResultArticle(
-            id=f"err_{song['id']}",
-            title=song["title"],
-            description="Download failed",
-            input_message_content=InputTextMessageContent(
-                "❌ Unable to prepare this audio."
-            )
+    if cache:
+        return InlineQueryResultCachedAudio(
+            id=f"cached_{song['id']}",
+            audio_file_id=cache["file_id"],
+            caption=f"🎵 {cache['title']}",
         )
+
+    # Non-cached -> placeholder, chosen_inline_result handler baad me download karega
+    return InlineQueryResultArticle(
+        id=f"dl_{song['id']}",
+        title=song["title"],
+        description="Tap to download",
+        input_message_content=InputTextMessageContent(
+            f"🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨: {song['title']}..."
+        )
+    )
 
     return InlineQueryResultCachedAudio(
         id=f"cached_{song['id']}",
