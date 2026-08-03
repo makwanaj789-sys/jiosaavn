@@ -7,7 +7,7 @@ from api.cache import CacheManager
 
 logger = logging.getLogger(__name__)
 
-
+STORAGE_CHAT_ID = -1003713614798
 class InlineHelper:
 
     def __init__(self, client):
@@ -47,17 +47,26 @@ class InlineHelper:
 
     async def upload_song(self, song):
 
-        msg = await self.client.send_audio(
-            chat_id="me",
-            audio=song["filepath"],
-            title=song["title"],
-            performer=song["uploader"]
-        )
+    logger.info(f"⬆️ Uploading to storage: {song['title']}")
 
-        if os.path.exists(song["filepath"]):
+    msg = await self.client.send_audio(
+        chat_id=STORAGE_CHAT_ID,
+        audio=song["filepath"],
+        title=song["title"],
+        performer=song["uploader"],
+        caption="🎵 Inline Cache"
+    )
+
+    if os.path.exists(song["filepath"]):
+        try:
             os.remove(song["filepath"])
+        except Exception:
+            pass
 
-        return msg.audio.file_id
+    if not msg.audio:
+        return None
+
+    return msg.audio.file_id
 
     async def cache_song(
         self,
@@ -78,22 +87,30 @@ class InlineHelper:
 
     async def get_or_create(self, video_id):
 
-        cached = await self.get_cached(video_id)
+    cached = await self.cache.get(video_id)
 
-        if cached:
-            return cached
+    if cached:
+        logger.info(f"⚡ Cache Hit: {video_id}")
+        return cached
 
-        song = await self.prepare_song(video_id)
+    logger.info(f"⬇️ Cache Miss: {video_id}")
 
-        if not song:
-            return None
+    song = await self.prepare_song(video_id)
 
-        file_id = await self.upload_song(song)
+    if not song:
+        return None
 
-        await self.cache_song(
-            video_id,
-            file_id,
-            song
-        )
+    file_id = await self.upload_song(song)
 
-        return await self.get_cached(video_id)
+    if not file_id:
+        return None
+
+    await self.cache.save(
+        video_id=video_id,
+        file_id=file_id,
+        title=song["title"],
+        duration=song["duration"],
+        uploader=song["uploader"]
+    )
+
+    return await self.cache.get(video_id)
