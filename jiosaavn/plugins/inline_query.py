@@ -36,32 +36,35 @@ async def cached_result(song, cache):
     )
 async def build_result(helper, song):
 
-    cache = await helper.get_or_create(song["id"])
+    try:
+        cache = await helper.get_or_create(song["id"])
+    except Exception as e:
+        logger.exception(e)
+        cache = None
 
-    if cache:
-
-        return InlineQueryResultCachedAudio(
-            id=f"cached_{song['id']}",
-            audio_file_id=cache["file_id"],
-            caption=f"🎵 {cache['title']}",
-            reply_markup=InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "🔍 Search Again",
-                            switch_inline_query_current_chat=""
-                        )
-                    ]
-                ]
+    if not cache:
+        return InlineQueryResultArticle(
+            id=f"err_{song['id']}",
+            title=song["title"],
+            description="Download failed",
+            input_message_content=InputTextMessageContent(
+                "❌ Unable to prepare this audio."
             )
         )
 
-    return InlineQueryResultArticle(
-        id=f"error_{song['id']}",
-        title=song["title"],
-        description="Unable to prepare this song.",
-        input_message_content=InputTextMessageContent(
-            "❌ Failed to prepare audio."
+    return InlineQueryResultCachedAudio(
+        id=f"cached_{song['id']}",
+        audio_file_id=cache["file_id"],
+        caption=f"🎵 {cache['title']}",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "🔍 Search Again",
+                        switch_inline_query_current_chat=""
+                    )
+                ]
+            ]
         )
     )
 @Bot.on_inline_query()
@@ -73,12 +76,19 @@ async def inline_query(client, inline_query):
         return
 
     engine = SearchEngine()
+helper = InlineHelper(client)
 
-    helper = InlineHelper(client)
+response = await engine.search(query)
 
-    response = await engine.search(query)
+results = []
 
-    results = []
+if not response.get("results"):
+    await inline_query.answer(
+        results=[],
+        cache_time=1,
+        is_personal=True
+    )
+    return
 
     tasks = []
 
