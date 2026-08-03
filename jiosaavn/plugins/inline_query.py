@@ -1,91 +1,194 @@
-import asyncio
-import logging
+# jiosaavn/plugins/inline_query.py
+
 import os
 import re
+import logging
 import traceback
-
 from pyrogram.types import (
-    InlineQuery,
+    InlineQuery, 
+    InlineQueryResultArticle, 
     InlineQueryResultCachedAudio,
-    InlineQueryResultArticle,
     InputTextMessageContent,
     InlineKeyboardMarkup,
-    InlineKeyboardButton,
+    InlineKeyboardButton
 )
-
 from pyrogram.enums import ParseMode
-
 from jiosaavn.bot import Bot
 from api.search_engine import SearchEngine
 from api.cache import CacheManager
 
+
 logger = logging.getLogger(__name__)
 
-async def build_cached_result(song, cache_data):
-    duration = song.get("duration", 0)
+# 🔥 DEBUG: Check if file is loading
+print("=" * 50)
+print("📦 INLINE_QUERY.PY LOADED ✅")
+print("=" * 50)
+logger.info("📦 INLINE_QUERY.PY LOADED")
 
-    return InlineQueryResultCachedAudio(
-        id=f"cache_{song['id']}",
-        audio_file_id=cache_data["file_id"],
-        caption=(
-            f"🎵 {song['title']}\n"
-            f"👤 {song['uploader']}\n"
-            f"⏱ {duration//60}:{duration%60:02d}"
-        ),
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "🔍 Search Again",
-                        switch_inline_query_current_chat=""
+@Bot.on_inline_query()
+async def inline_query(client: Bot, inline_query: InlineQuery):
+    """
+    Handle inline queries - @musi style
+    """
+    # 🔥 DEBUG: Check if function is called
+    print("🔥 INLINE QUERY TRIGGERED!")
+    logger.info("🔥 INLINE QUERY TRIGGERED!")
+    
+    try:
+        query = inline_query.query.strip()
+        user_id = inline_query.from_user.id
+        
+        # 🔥 DEBUG: Log everything
+        print(f"📝 USER: {user_id}, QUERY: '{query}'")
+        logger.info(f"📝 USER: {user_id}, QUERY: '{query}'")
+        
+        # Agar query empty hai toh search prompt dikhao
+        if not query:
+            print("⚠️ EMPTY QUERY - Showing prompt")
+            await inline_query.answer(
+                results=[
+                    InlineQueryResultArticle(
+                        id="start",
+                        title="🔍 Search for songs!",
+                        description="Type a song name to search",
+                        input_message_content=InputTextMessageContent(
+                            "🎵 **Music Search**\n\nType a song name to search for music!"
+                        ),
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton(
+                                "🎵 Search Now",
+                                switch_inline_query_current_chat=""
+                            )]
+                        ])
                     )
-                ]
-            ]
-        )
-    )
-async def build_download_result(song):
-    duration = song.get("duration", 0)
-
-    return InlineQueryResultArticle(
-        id=f"download_{song['id']}",
-        title=song["title"],
-        description=f"{song['uploader']} • {duration//60}:{duration%60:02d}",
-        input_message_content=InputTextMessageContent(
-            "⏳ Preparing music..."
-        ),
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "⬇ Download",
-                        callback_data=f"download_{song['id']}"
+                ],
+                cache_time=60,
+                is_personal=True
+            )
+            print("✅ EMPTY QUERY RESPONSE SENT")
+            return
+        
+        # ==========================================
+        # SEARCH SONGS
+        # ==========================================
+        print(f"🔍 SEARCHING FOR: {query}")
+        engine = SearchEngine()
+        search_results = await engine.search(query, page_size=10)
+        
+        print(f"📊 SEARCH RESULTS: {len(search_results.get('results', []))} found")
+        
+        if not search_results or not search_results.get("results"):
+            print("❌ NO RESULTS FOUND")
+            await inline_query.answer(
+                results=[
+                    InlineQueryResultArticle(
+                        id="no_results",
+                        title="❌ No results found",
+                        description=f"Couldn't find: {query}",
+                        input_message_content=InputTextMessageContent(
+                            f"❌ No results found for: {query}\n\nTry a different search term."
+                        )
                     )
-                ]
-            ]
+                ],
+                cache_time=60,
+                is_personal=True
+            )
+            return
+        
+        # ==========================================
+        # CREATE INLINE RESULTS
+        # ==========================================
+        results = []
+        cache = CacheManager(client.db)
+        
+        for idx, song in enumerate(search_results["results"][:10]):
+            video_id = song.get("id")
+            title = song.get("title", "Unknown")
+            artist = song.get("uploader", "Unknown Artist")
+            duration = song.get("duration", 0)
+            
+            # Format duration
+            minutes = duration // 60
+            seconds = duration % 60
+            duration_str = f"{minutes}:{seconds:02d}"
+            
+            # Check if song is cached
+            cached = await cache.get(video_id)
+            
+            print(f"🎵 {idx+1}. {title} - {'CACHED ✅' if cached else 'NEED DOWNLOAD 📥'}")
+            
+            if cached and cached.get("file_id"):
+                result = InlineQueryResultCachedAudio(
+                    id=f"cached_{video_id}",
+                    audio_file_id=cached["file_id"],
+                    caption=f"🎵 **{title}**\n\n👤 **Artist:** {artist}\n⏱️ **Duration:** {duration_str}\n📦 **Source:** Cache",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton(
+                            "🎵 Search Again",
+                            switch_inline_query_current_chat=""
+                        )],
+                        [InlineKeyboardButton(
+                            "🤖 𝐀м𝓊ᔕ𝕀¢",
+                            url="https://t.me/aartimusic_bot?start=home"
+                        )]
+                    ])
+                )
+            else:
+                result = InlineQueryResultArticle(
+                    id=f"download_{video_id}",
+                    title=f"🎵 {title}",
+                    description=f"👤 {artist} | ⏱️ {duration_str}",
+                    input_message_content=InputTextMessageContent(
+                        f"⏳ **Downloading:** {title}\n\n"
+                        f"👤 **Artist:** {artist}\n"
+                        f"⏱️ **Duration:** {duration_str}\n\n"
+                        f"_Please wait, this may take a few seconds..._",
+                        parse_mode=ParseMode.MARKDOWN
+                    ),
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton(
+                            "⏳ Processing...",
+                            callback_data=f"download_{video_id}"
+                        )]
+                    ])
+                )
+            
+            results.append(result)
+        
+        # ==========================================
+        # ANSWER INLINE QUERY
+        # ==========================================
+        print(f"📤 ANSWERING WITH {len(results)} RESULTS")
+        await inline_query.answer(
+            results=results,
+            cache_time=30,
+            is_personal=True,
+            switch_pm_text="🎵 Made with ❤️ by AartiMusic",
+            switch_pm_parameter="start"
         )
-    )
-engine = SearchEngine()
-cache = CacheManager(client.db)
-
-response = await engine.search(query)
-
-results = []
-
-for song in response.get("results", []):
-
-    cached = await cache.get(song["id"])
-
-    if cached:
-        results.append(
-            await build_cached_result(song, cached)
-        )
-    else:
-        results.append(
-            await build_download_result(song)
-        )
-
-await inline_query.answer(
-    results,
-    cache_time=5,
-    is_personal=True
-)
+        
+        print("✅ INLINE QUERY ANSWERED SUCCESSFULLY")
+        logger.info(f"✅ INLINE RESULTS SENT: {len(results)} results")
+        
+    except Exception as e:
+        print(f"❌ INLINE QUERY ERROR: {e}")
+        print(traceback.format_exc())
+        logger.error(f"❌ INLINE QUERY ERROR: {e}")
+        logger.error(traceback.format_exc())
+        try:
+            await inline_query.answer(
+                results=[
+                    InlineQueryResultArticle(
+                        id="error",
+                        title="❌ Error",
+                        description="Something went wrong!",
+                        input_message_content=InputTextMessageContent(
+                            f"❌ Error: {str(e)}"
+                        )
+                    )
+                ],
+                cache_time=0
+            )
+        except:
+            pass
