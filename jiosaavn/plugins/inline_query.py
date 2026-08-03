@@ -80,21 +80,20 @@ async def inline_query(client, inline_query):
 
     results = []
 
-    for song in response["results"]:
+    tasks = []
 
-        cached = await cache.get(song["id"])
+for song in response["results"]:
+    tasks.append(
+        build_result(
+            helper,
+            song
+        )
+    )
 
-        if cached:
-
-            results.append(
-                await cached_result(song, cached)
-            )
-
-        else:
-
-            results.append(
-                await loading_result(song)
-            )
+results = await asyncio.gather(
+    *tasks,
+    return_exceptions=False
+)
 
     await inline_query.answer(
         results,
