@@ -8,7 +8,6 @@ Plugins Package - Sabhi Bot Handlers
 from . import admin
 from . import commands
 from . import download_handler
-from . import inline
 from . import search_handler
 from . import text
 from . import inline_query
@@ -19,7 +18,6 @@ __all__ = [
     'admin',
     'commands',
     'download_handler',
-    'inline',
     'search_handler',
     'text',
     'inline_query',
