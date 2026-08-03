@@ -76,37 +76,35 @@ async def inline_query(client, inline_query):
         return
 
     engine = SearchEngine()
-helper = InlineHelper(client)
+    helper = InlineHelper(client)
 
-response = await engine.search(query)
+    response = await engine.search(query)
 
-results = []
-
-if not response.get("results"):
-    await inline_query.answer(
-        results=[],
-        cache_time=1,
-        is_personal=True
-    )
-    return
+    if not response.get("results"):
+        await inline_query.answer(
+            results=[],
+            cache_time=1,
+            is_personal=True
+        )
+        return
 
     tasks = []
 
-for song in response["results"]:
-    tasks.append(
-        build_result(
-            helper,
-            song
+    for song in response["results"]:
+        tasks.append(
+            build_result(
+                helper,
+                song
+            )
         )
+
+    results = await asyncio.gather(
+        *tasks,
+        return_exceptions=False
     )
 
-results = await asyncio.gather(
-    *tasks,
-    return_exceptions=False
-)
-
     await inline_query.answer(
-        results=results
+        results=results,
         cache_time=5,
         is_personal=True,
     )
