@@ -13,16 +13,16 @@ from pyrogram.types import (
 
 from jiosaavn.bot import Bot
 from api.search_engine import SearchEngine
-from api.cache import CacheManager
+from api.inline_helper import InlineHelper
 
 logger = logging.getLogger(__name__)
 
 async def cached_result(song, cache):
 
     return InlineQueryResultCachedAudio(
-        id=song["id"],
+        id=f"cached_{song['id']}",
         audio_file_id=cache["file_id"],
-        caption=f"🎵 {song['title']}",
+        caption=f"🎵 {cache['title']}",
         reply_markup=InlineKeyboardMarkup(
             [
                 [
@@ -34,14 +34,34 @@ async def cached_result(song, cache):
             ]
         )
     )
-async def loading_result(song):
+async def build_result(helper, song):
+
+    cache = await helper.get_or_create(song["id"])
+
+    if cache:
+
+        return InlineQueryResultCachedAudio(
+            id=f"cached_{song['id']}",
+            audio_file_id=cache["file_id"],
+            caption=f"🎵 {cache['title']}",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "🔍 Search Again",
+                            switch_inline_query_current_chat=""
+                        )
+                    ]
+                ]
+            )
+        )
 
     return InlineQueryResultArticle(
-        id=f"loading_{song['id']}",
+        id=f"error_{song['id']}",
         title=song["title"],
-        description="Preparing music...",
+        description="Unable to prepare this song.",
         input_message_content=InputTextMessageContent(
-            "⏳ Preparing music..."
+            "❌ Failed to prepare audio."
         )
     )
 @Bot.on_inline_query()
@@ -54,7 +74,7 @@ async def inline_query(client, inline_query):
 
     engine = SearchEngine()
 
-    cache = CacheManager(client.db)
+    helper = InlineHelper(client)
 
     response = await engine.search(query)
 
