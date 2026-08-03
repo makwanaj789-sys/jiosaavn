@@ -12,7 +12,6 @@ from . import inline
 from . import search_handler
 from . import text
 from . import inline_query
-from . import download_callback
 from . import chosen_inline_result
 
 # 🔥 SABHI FILES KO __all__ MEIN ADD KARO
@@ -24,7 +23,6 @@ __all__ = [
     'search_handler',
     'text',
     'inline_query',
-    'download_callback',
     'chosen_inline_result',
 ]
 
