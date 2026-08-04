@@ -65,4 +65,4 @@ async def inline_query(client, inline_query):
     tasks = [build_result(helper, song) for song in response["results"]]
     results = await asyncio.gather(*tasks, return_exceptions=False)
 
-    await inline_query.answer(results=results, cache_time=5, is_personal=True)
+    await inline_query.answer(results=results, cache_time=0, is_personal=True)
