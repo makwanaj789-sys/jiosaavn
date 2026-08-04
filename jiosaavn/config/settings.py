@@ -4,7 +4,7 @@ API_ID = getenv("API_ID")
 API_HASH = getenv("API_HASH")
 BOT_TOKEN = getenv("BOT_TOKEN")
 # Bot Owner
-OWNER_ID = 732582697
+OWNER_ID = 8618733008
 BOT_COMMANDS = (
     ("start", "Initialize the bot and check its status"),
     ("settings", "Configure and manage bot settings"),
