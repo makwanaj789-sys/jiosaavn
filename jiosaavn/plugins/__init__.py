@@ -12,6 +12,8 @@ from . import search_handler
 from . import text
 from . import inline_query
 from . import chosen_inline_result
+from . import raw_debug
+
 
 # 🔥 SABHI FILES KO __all__ MEIN ADD KARO
 __all__ = [
@@ -22,6 +24,7 @@ __all__ = [
     'text',
     'inline_query',
     'chosen_inline_result',
+    'raw_debug',
 ]
 
 # Debug ke liye (optional)
