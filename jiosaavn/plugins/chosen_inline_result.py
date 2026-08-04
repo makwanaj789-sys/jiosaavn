@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 async def on_chosen(client, result: ChosenInlineResult):
     result_id = result.result_id
     logger.info(f"🎯 CHOSEN INLINE RESULT: {result_id}")
+    logger.info(result)
+    logger.info(result.__dict__)
 
     if not result_id.startswith("dl_"):
         return
