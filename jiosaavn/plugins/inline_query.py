@@ -32,14 +32,17 @@ async def build_result(helper, song):
             ]])
         )
 
-    # Non-cached -> placeholder; chosen_inline_result.py isko download + auto-send karega
+    # Non-cached -> placeholder; reply_markup ZAROORI hai taaki inline_message_id mile
     return InlineQueryResultArticle(
         id=f"dl_{song['id']}",
         title=f"🎵 {song['title'][:60]}",
         description=f"👤 {song.get('uploader', 'Unknown')[:60]}",
         input_message_content=InputTextMessageContent(
             f"🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨: {song['title']}..."
-        )
+        ),
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("⏳ Loading...", callback_data="loading")
+        ]])
     )
 
 
