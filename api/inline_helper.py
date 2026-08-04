@@ -7,7 +7,7 @@ from api.cache import CacheManager
 
 logger = logging.getLogger(__name__)
 
-STORAGE_CHAT_ID = -1003713614798
+STORAGE_CHAT_ID = -1004333026215
 
 class InlineHelper:
 
