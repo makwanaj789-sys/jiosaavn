@@ -7,16 +7,20 @@ from .config.settings import (
     BOT_COMMANDS
 )
 from .app_webpage import start_web, stop_web
-from pyrogram.handlers import RawUpdateHandler
 
 from pyrogram import Client
-from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats
+from pyrogram.handlers import RawUpdateHandler
+from pyrogram.types import (
+    BotCommand,
+    BotCommandScopeAllPrivateChats
+)
 
 import logging
 
 logger = logging.getLogger(__name__)
 
 STORAGE_CHAT_ID = -1004333026215
+
 
 class Bot(Client):
 
@@ -51,12 +55,17 @@ class Bot(Client):
         except Exception as e:
             logger.error(f"❌ Could not resolve storage channel {STORAGE_CHAT_ID}: {e}")
 
-        # 🔬 Temporary debug: raw update inspect karo
+        # ================================
+        # RAW UPDATE DEBUG
+        # ================================
         async def raw_debug_handler(client, update, users, chats):
-            update_name = type(update).__name__
-            if "InlineSend" in update_name or "ChosenInline" in update_name:
-                logger.info(f"🔬 RAW UPDATE: {update_name}")
-                logger.info(f"🔬 RAW DATA: {update}")
+            try:
+                logger.info("=" * 80)
+                logger.info(f"RAW TYPE: {type(update).__name__}")
+                logger.info(update)
+                logger.info("=" * 80)
+            except Exception as e:
+                logger.error(f"RAW DEBUG ERROR: {e}")
 
         self.add_handler(RawUpdateHandler(raw_debug_handler))
         logger.info("🔬 Raw debug handler registered")
