@@ -11,6 +11,12 @@ from .app_webpage import start_web, stop_web
 from pyrogram import Client
 from pyrogram.types import BotCommand, BotCommandScopeAllPrivateChats
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+STORAGE_CHAT_ID = -1003713614798
+
 
 class Bot(Client):
 
@@ -41,6 +47,14 @@ class Bot(Client):
         )
 
         await self.add_commands()
+
+        # 🔥 Storage channel ko resolve karo taaki send_audio() peer error na de
+        try:
+            chat = await self.get_chat(STORAGE_CHAT_ID)
+            logger.info(f"✅ Storage channel resolved: {chat.title}")
+        except Exception as e:
+            logger.error(f"❌ Could not resolve storage channel {STORAGE_CHAT_ID}: {e}")
+            logger.error("👉 Check: bot us channel mein ADMIN hai ya nahi, aur ID sahi hai ya nahi")
 
         return self
 
