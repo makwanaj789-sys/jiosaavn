@@ -4,7 +4,7 @@ aiofiles
 mutagen
 requests
 dnspython
-pyrofork
+pyrofork==2.3.65
 python-dotenv
 humanfriendly
 python-dotenv
