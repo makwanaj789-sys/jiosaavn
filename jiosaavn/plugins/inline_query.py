@@ -45,13 +45,14 @@ async def build_result(helper, song):
         ]])
     )
 
-
 @Bot.on_inline_query()
 async def inline_query(client, inline_query):
     query = inline_query.query.strip()
 
     if not query:
         return
+
+    logger.info(f"📥 INLINE QUERY RECEIVED: '{query}' from user {inline_query.from_user.id}")
 
     engine = SearchEngine()
     helper = InlineHelper(client)
@@ -65,4 +66,10 @@ async def inline_query(client, inline_query):
     tasks = [build_result(helper, song) for song in response["results"]]
     results = await asyncio.gather(*tasks, return_exceptions=False)
 
+    # 🔥 Debug: confirm reply_markup present hai results mein
+    for r in results:
+        has_markup = r.reply_markup is not None
+        logger.info(f"📤 Result id={r.id} has_reply_markup={has_markup}")
+
     await inline_query.answer(results=results, cache_time=0, is_personal=True)
+    logger.info(f"✅ ANSWERED query '{query}' with {len(results)} results")
