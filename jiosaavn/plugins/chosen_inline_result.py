@@ -14,7 +14,9 @@ async def on_chosen(client, result: ChosenInlineResult):
     logger.info(f"🎯 CHOSEN INLINE RESULT: {result_id}")
     logger.info(result)
     logger.info(result.__dict__)
-
+    logger.info(f"Type: {type(result)}")
+    logger.info(f"Dir: {dir(result)}")
+    logger.info(f"inline_message_id: {getattr(result, 'inline_message_id', 'NOT_FOUND')}")
     if not result_id.startswith("dl_"):
         return
 
