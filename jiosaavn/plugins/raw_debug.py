@@ -1,5 +1,5 @@
 import logging
-from pyrogram import RawUpdateHandler
+from pyrogram.handlers import RawUpdateHandler
 from jiosaavn.bot import Bot
 
 logger = logging.getLogger(__name__)
