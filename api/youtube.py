@@ -12,21 +12,22 @@ def is_url(text):
 
 
 def _get_cookies_file():
-    cookies_path = os.path.join(os.getcwd(), "cookies.txt")
-    if os.path.exists(cookies_path):
-        return cookies_path
-    print("⚠️ cookies.txt not found!")
-    return None
+    cookies_data = os.environ.get("YOUTUBE_COOKIES")
+
+    if not cookies_data:
+        print("⚠️ YOUTUBE_COOKIES not found in environment!")
+        return None
 
     try:
         with tempfile.NamedTemporaryFile(
-            mode='w',
-            encoding='utf-8',
+            mode="w",
+            encoding="utf-8",
             delete=False,
-            suffix='.txt'
+            suffix=".txt"
         ) as f:
             f.write(cookies_data)
             return f.name
+
     except Exception as e:
         print(f"⚠️ Error creating cookies file: {e}")
         return None
