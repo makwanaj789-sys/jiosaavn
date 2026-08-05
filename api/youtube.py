@@ -62,7 +62,6 @@ async def download_video(query: str):
         "default_search": "ytsearch1",
         "geo_bypass": True,
         "extract_flat": False,
-        "cookiefile": cookies_path,
         "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
     }
 
