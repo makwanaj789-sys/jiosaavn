@@ -4,10 +4,10 @@ aiofiles
 mutagen
 requests
 dnspython
-pyrofork
+kurigram
 python-dotenv
 humanfriendly
 python-dotenv
-tgcrypto-pyrofork
+tgcrypto
 aiohttp[speedups]
 yt-dlp
