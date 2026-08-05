@@ -40,7 +40,7 @@ class Bot(Client):
         self.db = Database(DATABASE_URL)
         self.web_runner = None
 
-    async def start(self):
+    async def start(self, *args, **kwargs):
         await super().start()
 
         self.web_runner = await start_web()
