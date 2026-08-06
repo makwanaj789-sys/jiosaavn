@@ -8,13 +8,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def is_url(text):
     youtube_regex = r'(https?://)?(www\.)?(youtube\.com|youtu\.be)/'
     return re.match(youtube_regex, text) is not None
 
+
+def _get_cookies_file():
+    cookies_data = os.environ.get("YOUTUBE_COOKIES")
+    if not cookies_data:
+        logger.warning("⚠️ YOUTUBE_COOKIES not found in environment!")
+        return None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", delete=False, suffix=".txt"
+        ) as f:
+            f.write(cookies_data)
+            return f.name
+    except Exception as e:
+        logger.error(f"⚠️ Error creating cookies file: {e}")
+        return None
+
+
 class SearchEngine:
     def __init__(self):
-        # 🔥 COOKIES HATAO - Normal download_handler se kaam karega
         self.ydl_opts_search = {
             "format": "bestaudio/best",
             "noplaylist": True,
@@ -24,13 +41,22 @@ class SearchEngine:
             "extract_flat": True,
             "skip_download": True,
         }
-        
+
+        # 🔥 FIX: cookies + player_client add kiya, format selector flexible banaya
+        cookies_path = _get_cookies_file()
+
         self.ydl_opts_download = {
-            "format": "bestaudio/best",
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
             "noplaylist": True,
             "quiet": True,
             "geo_bypass": True,
             "extract_flat": False,
+            "cookiefile": cookies_path,
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"]
+                }
+            },
             "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
@@ -40,10 +66,6 @@ class SearchEngine:
         }
 
     async def search(self, query: str, search_type: str = "songs", page_size: int = 10):
-        """
-        Search for songs on YouTube
-        Returns 10 results by default
-        """
         try:
             if not is_url(query):
                 final_query = f"ytsearch{page_size}:{query}"
@@ -51,11 +73,10 @@ class SearchEngine:
                 final_query = query
 
             loop = asyncio.get_running_loop()
-            
+
             def sync_search():
                 with yt_dlp.YoutubeDL(self.ydl_opts_search) as ydl:
-                    info = ydl.extract_info(final_query, download=False)
-                    return info
+                    return ydl.extract_info(final_query, download=False)
 
             info = await loop.run_in_executor(None, sync_search)
 
@@ -64,23 +85,16 @@ class SearchEngine:
 
             if "entries" in info:
                 entries = info.get("entries", [])
-                results = []
-                
-                for entry in entries:
-                    if entry:
-                        results.append({
-                            "id": entry.get("id"),
-                            "title": entry.get("title", "Unknown"),
-                            "duration": entry.get("duration", 0),
-                            "uploader": entry.get("uploader", "Unknown Artist"),
-                            "url": f"https://www.youtube.com/watch?v={entry.get('id')}",
-                            "source": "youtube"
-                        })
-                
-                return {
-                    "results": results,
-                    "total": len(results)
-                }
+                results = [{
+                    "id": entry.get("id"),
+                    "title": entry.get("title", "Unknown"),
+                    "duration": entry.get("duration", 0),
+                    "uploader": entry.get("uploader", "Unknown Artist"),
+                    "url": f"https://www.youtube.com/watch?v={entry.get('id')}",
+                    "source": "youtube"
+                } for entry in entries if entry]
+
+                return {"results": results, "total": len(results)}
             else:
                 return {
                     "results": [{
@@ -99,18 +113,13 @@ class SearchEngine:
             return {"results": [], "total": 0, "error": str(e)}
 
     async def download_song(self, item_id: str):
-        """
-        Download song from YouTube using video ID
-        """
         try:
             url = f"https://www.youtube.com/watch?v={item_id}"
-            
             loop = asyncio.get_running_loop()
-            
+
             def sync_download():
                 with yt_dlp.YoutubeDL(self.ydl_opts_download) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    return info
+                    return ydl.extract_info(url, download=True)
 
             info = await loop.run_in_executor(None, sync_download)
 
@@ -120,10 +129,10 @@ class SearchEngine:
             filepath = None
             if info.get("requested_downloads"):
                 filepath = info["requested_downloads"][0].get("filepath")
-            
+
             if not filepath:
-                filepath = ydl.prepare_filename(info)
-                
+                with yt_dlp.YoutubeDL(self.ydl_opts_download) as ydl:
+                    filepath = ydl.prepare_filename(info)
                 base = os.path.splitext(filepath)[0]
                 for ext in [".mp3", ".webm", ".m4a", ".opus"]:
                     candidate = base + ext
