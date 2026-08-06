@@ -40,11 +40,9 @@ async def download_video(query: str):
 
     if not is_url(query):
         final_query = f"ytsearch10:{query}"
-        print(f"🔍 DEBUG: Transformed to search query = {final_query}")
         download = False
     else:
         final_query = query
-        print(f"🔍 DEBUG: It's a URL, downloading directly.")
         download = True
 
     temp_dir = os.path.join(
@@ -52,59 +50,46 @@ async def download_video(query: str):
         f"ytdl_{uuid.uuid4().hex[:8]}"
     )
 
-    # ====================================================================
-    # 🚀 FINAL ULTIMATE FIX (YouTube Naye Endpoints)
-    # ====================================================================
-
     ydl_opts = {
-        "format": "bestaudio/best",
+        "format": "bestaudio[ext=m4a]/bestaudio/best",
         "noplaylist": True,
         "quiet": True,
         "default_search": "ytsearch1",
         "geo_bypass": True,
         "extract_flat": False,
+        "cookiefile": cookies_path,   # 🔥 FIX: ab cookies actually use ho rahi hain
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"]
+            }
+        },
         "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
     }
-
-    # ====================================================================
 
     try:
         loop = asyncio.get_running_loop()
 
         def sync_download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(
-                    final_query,
-                    download=download
-                )
-                return info
+                return ydl.extract_info(final_query, download=download)
 
-        info = await loop.run_in_executor(
-            None,
-            sync_download
-        )
+        info = await loop.run_in_executor(None, sync_download)
 
         if download:
             filepath = None
-
             if info.get("requested_downloads"):
                 filepath = info["requested_downloads"][0].get("filepath")
 
             if not filepath:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     filepath = ydl.prepare_filename(info)
-
                 if not os.path.exists(filepath):
                     base = os.path.splitext(filepath)[0]
-
                     for ext in ("webm", "m4a", "mp3", "opus"):
                         candidate = base + "." + ext
-
                         if os.path.exists(candidate):
                             filepath = candidate
                             break
-
-            print("FINAL FILEPATH:", filepath)
 
             return {
                 "success": True,
@@ -115,47 +100,29 @@ async def download_video(query: str):
                     "filepath": filepath
                 }
             }
-
         else:
-            results = []
             entries = info.get("entries", [])
-
             if not entries:
-                print("❌ DEBUG: No entries found.")
-                return {
-                    "success": False,
-                    "error": "No results found"
-                }
+                return {"success": False, "error": "No results found"}
 
-            for entry in entries:
-                results.append({
-                    "id": entry.get("id"),
-                    "title": entry.get("title"),
-                    "duration": entry.get("duration"),
-                    "uploader": entry.get("uploader"),
-                    "url": f"https://www.youtube.com/watch?v={entry.get('id')}",
-                    "source": "youtube"
-                })
+            results = [{
+                "id": e.get("id"),
+                "title": e.get("title"),
+                "duration": e.get("duration"),
+                "uploader": e.get("uploader"),
+                "url": f"https://www.youtube.com/watch?v={e.get('id')}",
+                "source": "youtube"
+            } for e in entries]
 
-            print(f"✅ DEBUG: Found {len(results)} results.")
-
-            return {
-                "success": True,
-                "results": results,
-                "total": len(results)
-            }
+            return {"success": True, "results": results, "total": len(results)}
 
     except Exception as e:
         print(f"❌ DEBUG: yt-dlp Exception = {e}")
-
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
     finally:
         if cookies_path and os.path.exists(cookies_path):
             try:
                 os.remove(cookies_path)
-            except:
+            except Exception:
                 pass
