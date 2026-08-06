@@ -1,15 +1,12 @@
 import logging
-import re
-import os
 import traceback
 from pyrogram.types import (
-    Message,
     CallbackQuery,
     InlineKeyboardMarkup,
     InlineKeyboardButton
 )
 from jiosaavn.bot import Bot
-from api.search_engine import SearchEngine
+from api.inline_helper import InlineHelper
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +19,6 @@ async def download_callback(client: Bot, callback: CallbackQuery):
         if not data.startswith("youtube#"):
             return
 
-        # 🔥 FIX: Ye button sirf NORMAL CHAT (/am search) ke liye hai.
-        # Agar kabhi inline result se trigger ho jaye (callback.message None hoga), to safely ignore karo.
         if not callback.message:
             await callback.answer(
                 "⚠️ Please search again using inline mode (@yourbot query).",
@@ -41,79 +36,21 @@ async def download_callback(client: Bot, callback: CallbackQuery):
         status_msg = callback.message
         await status_msg.edit_text("🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬...")
 
-        engine = SearchEngine()
-        result = await engine.download_song(video_id)
+        # 🔥 FIX: ab cache check/save InlineHelper ke through hoga
+        helper = InlineHelper(client)
+        song = await helper.get_or_create(video_id)
 
-        if not result or not result.get("success"):
-            error_msg = result.get("error", "Unknown error")
-            await status_msg.edit_text(
-                f"❌ Download failed.\n\n**Source:** YOUTUBE\n**ID:** {video_id}\n\n`{error_msg}`"
-            )
+        if not song:
+            await status_msg.edit_text("❌ Download failed.")
             return
 
-        data = result.get("data", {})
-        title = data.get("title", "Unknown Title")
-        original_filepath = data.get("filepath")
-
-        if not original_filepath:
-            await status_msg.edit_text("❌ File path not found after download.")
-            return
-
-        # ========================================================
-        # FILE FINDING LOGIC
-        # ========================================================
-        dir_path = os.path.dirname(original_filepath)
-        base_name_without_ext = os.path.splitext(original_filepath)[0]
-
-        possible_file_paths = [
-            original_filepath,
-            f"{base_name_without_ext}.webm",
-            f"{base_name_without_ext}.m4a",
-            f"{base_name_without_ext}.mp3",
-            f"{base_name_without_ext}.opus"
-        ]
-
-        actual_filepath = None
-        for path in possible_file_paths:
-            if os.path.exists(path):
-                actual_filepath = path
-                break
-
-        if not actual_filepath and os.path.exists(dir_path):
-            for f in os.listdir(dir_path):
-                if f.lower().endswith(('.webm', '.m4a', '.mp3', '.opus')):
-                    actual_filepath = os.path.join(dir_path, f)
-                    break
-
-        if not actual_filepath:
-            await status_msg.edit_text(
-                f"❌ File not found on disk.\n\nChecked extension: .webm, .m4a, .mp3, .opus\nIn folder: `{dir_path}`"
-            )
-            return
-
-        # ========================================================
-        # SAFE RENAME
-        # ========================================================
-        filename_with_ext = os.path.basename(actual_filepath)
-        safe_filename = re.sub(r'[^\w\-_\. ]', '_', filename_with_ext)
-        safe_filepath = os.path.join(dir_path, safe_filename)
-
-        if safe_filepath != actual_filepath:
-            os.rename(actual_filepath, safe_filepath)
-            filepath = safe_filepath
-        else:
-            filepath = actual_filepath
-
-        # ========================================================
-        # UPLOAD
-        # ========================================================
-        await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{title}`...")
+        await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{song['title']}`...")
 
         await client.send_audio(
             chat_id=callback.message.chat.id,
-            audio=filepath,
-            title=title,
-            performer="YouTube",
+            audio=song["file_id"],   # 🔥 file_id use ho raha hai, cache hit ho to instant
+            title=song["title"],
+            performer=song.get("uploader", "YouTube"),
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")],
                 [InlineKeyboardButton("🤖 𝐀м𝓊ᔕ𝕀¢", url="https://t.me/aartimusic_bot?start=home")]
@@ -122,10 +59,7 @@ async def download_callback(client: Bot, callback: CallbackQuery):
 
         await status_msg.delete()
 
-        if os.path.exists(filepath):
-            os.remove(filepath)
-
-        logger.info(f"✅ SONG SENT SUCCESSFULLY: {title}")
+        logger.info(f"✅ SONG SENT SUCCESSFULLY: {song['title']}")
 
     except Exception as e:
         logger.error(f"❌ DOWNLOAD ERROR: {e}")
