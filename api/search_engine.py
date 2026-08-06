@@ -59,6 +59,7 @@ class SearchEngine:
             "geo_bypass": True,
             "extract_flat": False,
             "cookiefile": cookies_path,
+            "remote_components": ["ejs:github"],
             "extractor_args": {
                 "youtube": {
                     "player_client": ["web"]
