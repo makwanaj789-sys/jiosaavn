@@ -67,7 +67,7 @@ async def download_video(query: str):
         "cookiefile": cookies_path,   # 🔥 FIX: ab cookies actually use ho rahi hain
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web"]
+                "player_client": ["web"]
             }
         },
         "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
