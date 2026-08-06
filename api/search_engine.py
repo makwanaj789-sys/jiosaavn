@@ -15,10 +15,16 @@ def is_url(text):
 
 
 def _get_cookies_file():
-    cookies_path = os.path.join(os.getcwd(), "cookies.txt")
+    # Project root folder dhoondo (jahan main.py/requirements.txt hai)
+    # __file__ is api/search_engine.py, to ek level upar jao
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cookies_path = os.path.join(base_dir, "cookies.txt")
+
     if os.path.exists(cookies_path):
+        logger.info(f"✅ Cookies file found at: {cookies_path}")
         return cookies_path
-    logger.warning("⚠️ cookies.txt not found!")
+
+    logger.warning(f"⚠️ cookies.txt not found at expected path: {cookies_path}")
     return None
     try:
         with tempfile.NamedTemporaryFile(
