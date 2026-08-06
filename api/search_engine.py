@@ -61,7 +61,7 @@ class SearchEngine:
             "cookiefile": cookies_path,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "web"]
+                    "player_client": ["web"]
                 }
             },
             "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
