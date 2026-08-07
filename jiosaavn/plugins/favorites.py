@@ -123,15 +123,13 @@ async def fav_play(client: Bot, callback: CallbackQuery):
 
         await callback.answer()
 
-        is_fav = True  # favorites list se aaya hai, matlab already favorite hai
-
         await client.send_audio(
-            chat_id=callback.from_user.id,
+            chat_id=callback.message.chat.id,   # 🔥 FIX: jahan se tap hua wahi bhejo (group/DM dono)
             audio=song["file_id"],
             title=song["title"],
             performer=song.get("uploader", "YouTube"),
             reply_markup=InlineKeyboardMarkup([
-                [favorite_button(video_id, is_fav=is_fav)],
+                [favorite_button(video_id, is_fav=True)],
                 [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
             ])
         )
