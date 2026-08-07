@@ -1,7 +1,12 @@
 import logging
 import traceback
 
-from pyrogram.types import ChosenInlineResult, InputMediaAudio
+from pyrogram.types import (
+    ChosenInlineResult,
+    InputMediaAudio,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
 from jiosaavn.bot import Bot
 from api.inline_helper import InlineHelper
 
@@ -12,11 +17,7 @@ logger = logging.getLogger(__name__)
 async def on_chosen(client, result: ChosenInlineResult):
     result_id = result.result_id
     logger.info(f"🎯 CHOSEN INLINE RESULT: {result_id}")
-    logger.info(result)
-    logger.info(result.__dict__)
-    logger.info(f"Type: {type(result)}")
-    logger.info(f"Dir: {dir(result)}")
-    logger.info(f"inline_message_id: {getattr(result, 'inline_message_id', 'NOT_FOUND')}")
+
     if not result_id.startswith("dl_"):
         return
 
@@ -36,9 +37,15 @@ async def on_chosen(client, result: ChosenInlineResult):
             await client.edit_inline_text(inline_message_id, "❌ Download failed.")
             return
 
+        # 🔥 FAVORITES: inline mein bhi button add karo
+        markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("❤️ Add to Favorites", callback_data=f"fav_add_{video_id}")
+        ]])
+
         await client.edit_inline_media(
             inline_message_id,
-            InputMediaAudio(media=song["file_id"], caption=f"🎵 {song['title']}")
+            InputMediaAudio(media=song["file_id"], caption=f"🎵 {song['title']}"),
+            reply_markup=markup
         )
 
         logger.info(f"✅ INLINE MESSAGE EDITED SUCCESSFULLY: {song['title']}")
