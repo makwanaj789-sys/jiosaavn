@@ -1,5 +1,6 @@
 import logging
 import traceback
+from pyrogram import ContinuePropagation
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardMarkup,
@@ -18,7 +19,7 @@ async def download_callback(client: Bot, callback: CallbackQuery):
         data = callback.data
 
         if not data.startswith("youtube#"):
-            return
+            raise ContinuePropagation   # 🔥 FIX: baaki handlers ko chance do
 
         if not callback.message:
             await callback.answer(
@@ -46,7 +47,6 @@ async def download_callback(client: Bot, callback: CallbackQuery):
 
         await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{song['title']}`...")
 
-        # 🔥 FAVORITES: check karo ye gaana already favorite hai ya nahi
         favorites = FavoritesManager(client.db)
         is_fav = await favorites.is_favorite(callback.from_user.id, video_id)
 
@@ -69,6 +69,8 @@ async def download_callback(client: Bot, callback: CallbackQuery):
 
         logger.info(f"✅ SONG SENT SUCCESSFULLY: {song['title']}")
 
+    except ContinuePropagation:
+        raise
     except Exception as e:
         logger.error(f"❌ DOWNLOAD ERROR: {e}")
         logger.error(traceback.format_exc())
