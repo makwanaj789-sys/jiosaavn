@@ -58,6 +58,7 @@ async def inline_query(client, inline_query):
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
                 title="AMusic 🎵",
+                thumb_url= "https://your-logo-url.jpg",
                 description="🎧 Search any song, Aarti will find it...",
                 input_message_content=InputTextMessageContent(
                     "🎵 AartiMusic se gaana search karo!"
