@@ -64,6 +64,11 @@ class SearchEngine:
             "extractor_args": {
                 "youtube": {
                     "player_client": ["web"]
+            "postprocessors": [{
+              "key": "FFmpegExtractAudio",
+              "preferredcodec": "mp3",
+              "preferredquality": "192",
+    }],
                 }
             },
             "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
