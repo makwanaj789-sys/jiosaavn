@@ -59,6 +59,7 @@ class SearchEngine:
             "geo_bypass": True,
             "extract_flat": False,
             "cookiefile": cookies_path,
+            "concurrent_fragment_downloads": 8, 
             "remote_components": ["ejs:github"],
             "extractor_args": {
                 "youtube": {
@@ -66,11 +67,6 @@ class SearchEngine:
                 }
             },
             "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }],
         }
 
     async def search(self, query: str, search_type: str = "songs", page_size: int = 10):
