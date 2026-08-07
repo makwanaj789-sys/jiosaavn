@@ -57,8 +57,8 @@ async def inline_query(client, inline_query):
         results = [
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
-                title="🎵 Music 🎵",
-                description="Enter your search term",
+                title="AMusic 🎵",
+                description="🎧 Search any song, Aarti will find it...",
                 input_message_content=InputTextMessageContent(
                     "🎵 AartiMusic se gaana search karo!"
                 ),
