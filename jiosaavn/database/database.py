@@ -36,13 +36,6 @@ class Database:
         self.cache_db = self._client["jiosaavnV2_cache"]
         self.music_cache = self.cache_db.music_cache
 
-    # =====================================================
-        # MUSIC CACHE DATABASE
-        # =====================================================
-
-        self.cache_db = self._client["jiosaavnV2_cache"]
-        self.music_cache = self.cache_db.music_cache
-
         # =====================================================
         # FAVORITES DATABASE
         # =====================================================
