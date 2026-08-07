@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid 
 
 from pyrogram.types import (
     InlineQueryResultCachedAudio,
@@ -47,11 +48,23 @@ async def build_result(helper, song):
         ]])
     )
 
+
 @Bot.on_inline_query()
 async def inline_query(client, inline_query):
     query = inline_query.query.strip()
 
     if not query:
+        results = [
+            InlineQueryResultArticle(
+                id=str(uuid.uuid4()),
+                title="🎵 Music 🎵",
+                description="Enter your search term",
+                input_message_content=InputTextMessageContent(
+                    "🎵 AartiMusic se gaana search karo!"
+                ),
+            )
+        ]
+        await inline_query.answer(results=results, cache_time=1, is_personal=True)
         return
 
     logger.info(f"📥 INLINE QUERY RECEIVED: '{query}' from user {inline_query.from_user.id}")
@@ -68,7 +81,6 @@ async def inline_query(client, inline_query):
     tasks = [build_result(helper, song) for song in response["results"]]
     results = await asyncio.gather(*tasks, return_exceptions=False)
 
-    # 🔥 Debug: confirm reply_markup present hai results mein
     for r in results:
         has_markup = r.reply_markup is not None
         logger.info(f"📤 Result id={r.id} has_reply_markup={has_markup}")
