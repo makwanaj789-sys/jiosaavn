@@ -1,59 +1,78 @@
 import logging
 import traceback
-
 from pyrogram.types import (
-    ChosenInlineResult,
-    InputMediaAudio,
+    CallbackQuery,
     InlineKeyboardMarkup,
     InlineKeyboardButton
 )
 from jiosaavn.bot import Bot
 from api.inline_helper import InlineHelper
+from api.favorites import FavoritesManager
 
 logger = logging.getLogger(__name__)
 
 
-@Bot.on_chosen_inline_result()
-async def on_chosen(client, result: ChosenInlineResult):
-    result_id = result.result_id
-    logger.info(f"🎯 CHOSEN INLINE RESULT: {result_id}")
-
-    if not result_id.startswith("dl_"):
-        return
-
-    video_id = result_id.replace("dl_", "")
-    inline_message_id = result.inline_message_id
-    logger.info(f"📩 inline_message_id: {inline_message_id}")
-
-    if not inline_message_id:
-        logger.warning("❌ No inline_message_id received — cannot edit message.")
-        return
-
+@Bot.on_callback_query()
+async def download_callback(client: Bot, callback: CallbackQuery):
     try:
+        data = callback.data
+
+        if not data.startswith("youtube#"):
+            return
+
+        if not callback.message:
+            await callback.answer(
+                "⚠️ Please search again using inline mode (@yourbot query).",
+                show_alert=True
+            )
+            return
+
+        await callback.answer()
+
+        video_id = data.split("#")[1]
+        if not video_id:
+            await callback.message.edit_text("❌ Invalid video ID.")
+            return
+
+        status_msg = callback.message
+        await status_msg.edit_text("🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨 𝘺𝘰𝘶𝘳 𝘵𝘳𝘢𝘤𝘬...")
+
         helper = InlineHelper(client)
         song = await helper.get_or_create(video_id)
 
         if not song:
-            await client.edit_inline_text(inline_message_id, "❌ Download failed.")
+            await status_msg.edit_text("❌ Download failed.")
             return
 
-        # 🔥 FAVORITES: inline mein bhi button add karo
-        markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("❤️ Add to Favorites", callback_data=f"fav_add_{video_id}")
-        ]])
+        await status_msg.edit_text(f"⚡ 𝘍𝘪𝘯𝘪𝘴𝘩𝘪𝘯𝘨 𝘶𝘱... `{song['title']}`...")
 
-        await client.edit_inline_media(
-            inline_message_id,
-            InputMediaAudio(media=song["file_id"], caption=f"🎵 {song['title']}"),
-            reply_markup=markup
+        # 🔥 FAVORITES: check karo ye gaana already favorite hai ya nahi
+        favorites = FavoritesManager(client.db)
+        is_fav = await favorites.is_favorite(callback.from_user.id, video_id)
+
+        await client.send_audio(
+            chat_id=callback.message.chat.id,
+            audio=song["file_id"],
+            title=song["title"],
+            performer=song.get("uploader", "YouTube"),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "💔 Remove Favorite" if is_fav else "❤️ Add to Favorites",
+                    callback_data=f"fav_remove_{video_id}" if is_fav else f"fav_add_{video_id}"
+                )],
+                [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")],
+                [InlineKeyboardButton("🤖 𝐀м𝓊ᔕ𝕀¢", url="https://t.me/aartimusic_bot?start=home")]
+            ])
         )
 
-        logger.info(f"✅ INLINE MESSAGE EDITED SUCCESSFULLY: {song['title']}")
+        await status_msg.delete()
+
+        logger.info(f"✅ SONG SENT SUCCESSFULLY: {song['title']}")
 
     except Exception as e:
-        logger.error(f"❌ CHOSEN_INLINE_RESULT ERROR: {e}")
+        logger.error(f"❌ DOWNLOAD ERROR: {e}")
         logger.error(traceback.format_exc())
         try:
-            await client.edit_inline_text(inline_message_id, f"❌ Error: `{type(e).__name__}: {e}`")
-        except Exception as e2:
-            logger.error(f"❌ Even edit_text failed: {e2}")
+            await callback.answer("❌ Download failed!", show_alert=True)
+        except Exception:
+            pass
