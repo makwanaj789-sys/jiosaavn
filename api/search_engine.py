@@ -15,8 +15,6 @@ def is_url(text):
 
 
 def _get_cookies_file():
-    # Project root folder dhoondo (jahan main.py/requirements.txt hai)
-    # __file__ is api/search_engine.py, to ek level upar jao
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cookies_path = os.path.join(base_dir, "cookies.txt")
 
@@ -26,15 +24,6 @@ def _get_cookies_file():
 
     logger.warning(f"⚠️ cookies.txt not found at expected path: {cookies_path}")
     return None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w", encoding="utf-8", delete=False, suffix=".txt"
-        ) as f:
-            f.write(cookies_data)
-            return f.name
-    except Exception as e:
-        logger.error(f"⚠️ Error creating cookies file: {e}")
-        return None
 
 
 class SearchEngine:
@@ -49,7 +38,6 @@ class SearchEngine:
             "skip_download": True,
         }
 
-        # 🔥 FIX: cookies + player_client add kiya, format selector flexible banaya
         cookies_path = _get_cookies_file()
 
         self.ydl_opts_download = {
@@ -62,14 +50,16 @@ class SearchEngine:
             "remote_components": ["ejs:github"],
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["web"],
-            "postprocessors": [{
-              "key": "FFmpegExtractAudio",
-              "preferredcodec": "mp3",
-              "preferredquality": "192",
-            }],
+                    "player_client": ["web"]
                 }
             },
+            "external_downloader": "aria2c",
+            "external_downloader_args": ["-x", "16", "-s", "16", "-k", "1M"],
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
+            }],
             "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
         }
 
