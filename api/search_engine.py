@@ -59,7 +59,6 @@ class SearchEngine:
             "geo_bypass": True,
             "extract_flat": False,
             "cookiefile": cookies_path,
-            "concurrent_fragment_downloads": 8,
             "remote_components": ["ejs:github"],
             "extractor_args": {
                 "youtube": {
