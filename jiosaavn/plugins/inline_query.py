@@ -22,6 +22,8 @@ async def build_result(helper, song):
     except Exception:
         cache = None
 
+    thumbnail_url = f"https://i.ytimg.com/vi/{song['id']}/hqdefault.jpg"
+
     if cache:
         return InlineQueryResultCachedAudio(
             id=f"cached_{song['id']}",
@@ -32,11 +34,11 @@ async def build_result(helper, song):
             ]])
         )
 
-    # Non-cached -> placeholder; reply_markup ZAROORI hai taaki inline_message_id mile
     return InlineQueryResultArticle(
         id=f"dl_{song['id']}",
         title=f"🎵 {song['title'][:60]}",
         description=f"👤 {song.get('uploader', 'Unknown')[:60]}",
+        thumb_url=thumbnail_url,   # 🔥 thumbnail add kiya
         input_message_content=InputTextMessageContent(
             f"🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨: {song['title']}..."
         ),
