@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import uuid 
+import uuid
 
 from pyrogram.types import (
     InlineQueryResultCachedAudio,
@@ -39,7 +39,7 @@ async def build_result(helper, song):
         id=f"dl_{song['id']}",
         title=f"🎵 {song['title'][:60]}",
         description=f"👤 {song.get('uploader', 'Unknown')[:60]}",
-        thumb_url=thumbnail_url,   # 🔥 thumbnail add kiya
+        thumb_url=thumbnail_url,
         input_message_content=InputTextMessageContent(
             f"🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨: {song['title']}..."
         ),
@@ -53,12 +53,21 @@ async def build_result(helper, song):
 async def inline_query(client, inline_query):
     query = inline_query.query.strip()
 
+    # 🔥 STATS: user track karo (empty query pe bhi, kyunki user ne bot open kiya)
+    if inline_query.from_user:
+        try:
+            exists = await client.db.is_user_exist(inline_query.from_user.id)
+            if not exists:
+                await client.db.add_user(inline_query.from_user.id)
+        except Exception:
+            logger.exception("User tracking error")
+
     if not query:
         results = [
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
                 title="AMusic 🎵",
-                thumb_url= "https://raw.githubusercontent.com/makwanaj789-sys/Umclon-reset-file/main/thumb.jpg",
+                thumb_url="https://raw.githubusercontent.com/makwanaj789-sys/Umclon-reset-file/main/thumb.jpg",
                 description="🎧 Search any song, Aarti will find it...",
                 input_message_content=InputTextMessageContent(
                     "🎵 AartiMusic se gaana search karo!"
@@ -69,6 +78,15 @@ async def inline_query(client, inline_query):
         return
 
     logger.info(f"📥 INLINE QUERY RECEIVED: '{query}' from user {inline_query.from_user.id}")
+
+    # 🔥 STATS: search count badhao
+    try:
+        await client.db.add_search(
+            user_id=inline_query.from_user.id,
+            chat_id=0
+        )
+    except Exception:
+        logger.exception("Search tracking error")
 
     engine = SearchEngine()
     helper = InlineHelper(client)
