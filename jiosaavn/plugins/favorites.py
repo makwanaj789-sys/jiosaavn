@@ -130,7 +130,8 @@ async def fav_play(client: Bot, callback: CallbackQuery):
             performer=song.get("uploader", "YouTube"),
             reply_markup=InlineKeyboardMarkup([
                 [favorite_button(video_id, is_fav=True)],
-                [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")]
+                [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")],
+                [InlineKeyboardButton("➕ Add me to your group", url="https://t.me/AartiMusic_bot?startgroup=true")]
             ])
         )
 
