@@ -32,7 +32,9 @@ async def build_result(helper, song):
             caption=f"🎵 {cache['title']}",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔍 Search Again", switch_inline_query_current_chat="")
-            ]])
+            ],
+                [InlineKeyboardButton("➕ Add me to your group", url="https://t.me/AartiMusic_bot?startgroup=true")]
+])
         )
 
     return InlineQueryResultArticle(
