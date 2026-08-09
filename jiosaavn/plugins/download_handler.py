@@ -61,7 +61,7 @@ async def download_callback(client: Bot, callback: CallbackQuery):
                     callback_data=f"fav_remove_{video_id}" if is_fav else f"fav_add_{video_id}"
                 )],
                 [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")],
-                [InlineKeyboardButton("🤖 𝐀м𝓊ᔕ𝕀¢", url="https://t.me/aartimusic_bot?start=home")]
+                [InlineKeyboardButton("➕ Add me to your group", url="https://t.me/AartiMusic_bot?startgroup=true")]
             ])
         )
 
