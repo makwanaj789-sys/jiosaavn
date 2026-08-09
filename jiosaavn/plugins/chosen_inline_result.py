@@ -38,9 +38,10 @@ async def on_chosen(client, result: ChosenInlineResult):
             return
 
         # 🔥 FAVORITES: inline mein bhi button add karo
-        markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("❤️ Add to Favorites", callback_data=f"fav_add_{video_id}")
-        ]])
+        markup = InlineKeyboardMarkup([
+         [InlineKeyboardButton("❤️ Add to Favorites", callback_data=f"fav_add_{video_id}")],
+         [InlineKeyboardButton("➕ Add me to your group", url="https://t.me/AartiMusic_bot?startgroup=true")]
+])
 
         await client.edit_inline_media(
             inline_message_id,
