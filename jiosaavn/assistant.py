@@ -17,6 +17,7 @@ class Assistant:
             in_memory=True
         )
         self.call_py: PyTgCalls | None = None
+        self.bot_ref = None 
 
     async def start(self):
         await self.app.start()
