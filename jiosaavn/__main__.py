@@ -1,12 +1,13 @@
+import asyncio
 import logging
 import logging.config
 import importlib
 
 from dotenv import load_dotenv
+from pyrogram import idle
 
 
-def main():
-
+def setup_logging():
     try:
         logging.config.fileConfig("logging.conf")
     except Exception:
@@ -15,12 +16,30 @@ def main():
     logging.getLogger().setLevel(logging.INFO)
     logging.getLogger("pyrogram").setLevel(logging.INFO)
 
+
+async def run():
     load_dotenv()
+    setup_logging()
 
     bot_module = importlib.import_module("jiosaavn.bot")
-    bot = bot_module.Bot()
+    assistant_module = importlib.import_module("jiosaavn.assistant")
 
-    bot.run()
+    bot = bot_module.Bot()
+    assistant = assistant_module.Assistant()
+
+    await bot.start()
+    await assistant.start()
+
+    print("✅ Bot and Assistant both started!", flush=True)
+
+    await idle()
+
+    await bot.stop()
+    await assistant.stop()
+
+
+def main():
+    asyncio.run(run())
 
 
 if __name__ == "__main__":
