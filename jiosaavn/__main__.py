@@ -43,5 +43,9 @@ async def run():
     await assistant.stop()
 
 
+def main():
+    asyncio.run(run())
+
+
 if __name__ == "__main__":
     main()
