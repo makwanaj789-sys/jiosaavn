@@ -31,6 +31,7 @@ async def run():
     await assistant.start()
 
     # 🔥 Voice chat plugin ko assistant reference do
+    assistant.bot_ref = bot
     voice_chat_module = importlib.import_module("jiosaavn.plugins.voice_chat")
     voice_chat_module.set_assistant(assistant)
 
@@ -40,10 +41,6 @@ async def run():
 
     await bot.stop()
     await assistant.stop()
-
-
-def main():
-    asyncio.run(run())
 
 
 if __name__ == "__main__":
