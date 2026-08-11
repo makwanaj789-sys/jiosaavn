@@ -30,6 +30,10 @@ async def run():
     await bot.start()
     await assistant.start()
 
+    # 🔥 Voice chat plugin ko assistant reference do
+    voice_chat_module = importlib.import_module("jiosaavn.plugins.voice_chat")
+    voice_chat_module.set_assistant(assistant)
+
     print("✅ Bot and Assistant both started!", flush=True)
 
     await idle()
