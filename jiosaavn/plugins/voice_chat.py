@@ -18,6 +18,7 @@ from jiosaavn.assistant import Assistant
 from api.search_engine import SearchEngine
 from api.thumbnail import generate_now_playing_card
 from api.favorites import FavoritesManager
+from api.local_cache import LocalCacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +28,8 @@ queues = defaultdict(list)
 active_chats = set()
 paused_chats = set()
 now_playing_msg = {}
-local_file_cache = {}
 
-# Track who started/controlled playback per chat
 last_action_user = {}
-
-# 🔥 Track exactly which song object is playing in each chat right now
 now_playing_song = {}
 
 
@@ -42,12 +39,16 @@ def set_assistant(app: Assistant):
 
     @app.call_py.on_update(pytgcalls_filters.stream_end)
     async def on_stream_end(client, update: Update):
+        logger.info(f"🔔 STREAM_END EVENT FIRED: chat_id={getattr(update, 'chat_id', 'N/A')}, type={type(update)}")
         if isinstance(update, StreamEnded):
             chat_id = update.chat_id
+            logger.info(f"🔔 Queue for {chat_id}: {[s['title'] for s in queues[chat_id]]}")
             await play_next(chat_id)
+        else:
+            logger.warning(f"🔔 Update was NOT StreamEnded instance: {update}")
 
 
-async def get_song_ready(query: str):
+async def get_song_ready(query: str, db):
     engine = SearchEngine()
     response = await engine.search(query)
     results = response.get("results", [])
@@ -61,15 +62,18 @@ async def get_song_ready(query: str):
     uploader = results[0].get("uploader", "Unknown Artist")
     thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
 
-    if video_id in local_file_cache and os.path.exists(local_file_cache[video_id]):
-        filepath = local_file_cache[video_id]
-        logger.info(f"⚡ LOCAL CACHE HIT: {title}")
+    local_cache = LocalCacheManager(db)
+    cached_path = await local_cache.get(video_id)
+
+    if cached_path:
+        filepath = cached_path
+        logger.info(f"⚡ MONGO LOCAL CACHE HIT: {title}")
     else:
         result = await engine.download_song(video_id)
         if not result or not result.get("success"):
             return None
         filepath = result["data"]["filepath"]
-        local_file_cache[video_id] = filepath
+        filepath = await local_cache.save(video_id, filepath)
 
     return {
         "video_id": video_id,
@@ -139,7 +143,6 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
                 reply_markup=now_playing_markup()
             )
         now_playing_msg[chat_id] = msg
-        # 🔥 store which song object is now playing, for the favorites button
         now_playing_song[chat_id] = song
     except Exception as e:
         logger.error(f"send_now_playing_card error: {e}")
@@ -211,7 +214,7 @@ async def voice_play(client: Bot, message: Message):
     status_msg = await message.reply("🔎 **Searching & preparing your track...**")
 
     try:
-        song = await get_song_ready(query)
+        song = await get_song_ready(query, client.db)
         if not song:
             await status_msg.edit_text("❌ **Couldn't find or download that song.**")
             return
@@ -276,8 +279,11 @@ async def voice_shuffle(client: Bot, message: Message):
         video_id = picked["video_id"]
         title = picked["title"]
 
-        if video_id in local_file_cache and os.path.exists(local_file_cache[video_id]):
-            filepath = local_file_cache[video_id]
+        local_cache = LocalCacheManager(client.db)
+        cached_path = await local_cache.get(video_id)
+
+        if cached_path:
+            filepath = cached_path
         else:
             engine = SearchEngine()
             result = await engine.download_song(video_id)
@@ -285,7 +291,7 @@ async def voice_shuffle(client: Bot, message: Message):
                 await status_msg.edit_text("❌ **Couldn't download that track.**")
                 return
             filepath = result["data"]["filepath"]
-            local_file_cache[video_id] = filepath
+            filepath = await local_cache.save(video_id, filepath)
 
         song = {
             "video_id": video_id,
@@ -424,7 +430,6 @@ async def cb_fav(client: Bot, callback: CallbackQuery):
     chat_id = callback.message.chat.id
     user_id = callback.from_user.id
 
-    # 🔥 Use the tracked now_playing_song dict — accurate, no caption parsing needed
     song = now_playing_song.get(chat_id)
 
     if not song:
@@ -437,7 +442,7 @@ async def cb_fav(client: Bot, callback: CallbackQuery):
             user_id=user_id,
             video_id=song["video_id"],
             title=song["title"],
-            file_id="",  # voice chat songs are local files, not cached Telegram file_ids
+            file_id="",
             uploader=song.get("uploader", "")
         )
         await callback.answer(f"❤️ '{song['title'][:30]}' added to your favorites!", show_alert=False)
