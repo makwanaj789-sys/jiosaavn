@@ -198,7 +198,7 @@ async def voice_play(client: Bot, message: Message):
             return
 
         # 🔥 FIX: real status check karo, sirf local set pe depend mat karo
-        active_calls = assistant_client.call_py.calls
+        active_calls = await assistant_client.call_py.calls
         is_actually_active = chat_id in active_calls
 
         if is_actually_active:
