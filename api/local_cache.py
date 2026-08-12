@@ -4,7 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# 🔥 Dedicated permanent folder — not /tmp, so OS never auto-cleans it
+# Dedicated permanent folder — not /tmp, so the OS never auto-cleans it
 PERSIST_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "vc_downloads"
@@ -36,7 +36,6 @@ class LocalCacheManager:
 
     async def save(self, video_id: str, filepath: str):
         try:
-            # Move the downloaded file into the permanent folder
             if os.path.exists(filepath) and not filepath.startswith(PERSIST_DIR):
                 ext = os.path.splitext(filepath)[1]
                 new_path = os.path.join(PERSIST_DIR, f"{video_id}{ext}")
