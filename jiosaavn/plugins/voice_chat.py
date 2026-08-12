@@ -7,6 +7,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton
 )
+from pytgcalls import filters as pytgcalls_filters
 from pytgcalls.types import MediaStream, Update
 from pytgcalls.types.stream import StreamEnded
 
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 assistant_client: Assistant = None
 
 # Queue system: each chat has its own list of pending songs
+# format: {chat_id: [{"video_id": ..., "title": ..., "filepath": ...}, ...]}
 queues = defaultdict(list)
 
 # Tracks which chats currently have an active stream
@@ -35,7 +37,7 @@ def set_assistant(app: Assistant):
     global assistant_client
     assistant_client = app
 
-    @app.call_py.on_update(filters.stream_end)
+    @app.call_py.on_update(pytgcalls_filters.stream_end)
     async def on_stream_end(client, update: Update):
         if isinstance(update, StreamEnded):
             chat_id = update.chat_id
@@ -141,7 +143,8 @@ async def play_next(chat_id: int):
         )
         active_chats.add(chat_id)
         paused_chats.discard(chat_id)
-        await send_now_playing_card(assistant_client.bot_ref, chat_id, song)
+        if assistant_client.bot_ref:
+            await send_now_playing_card(assistant_client.bot_ref, chat_id, song)
         logger.info(f"✅ VC AUTO-PLAYING NEXT: {song['title']} in {chat_id}")
     except Exception as e:
         logger.error(f"play_next error: {e}")
@@ -196,9 +199,6 @@ async def voice_play(client: Bot, message: Message):
 
         active_chats.add(chat_id)
         await status_msg.delete()
-
-        # 🔥 Store bot reference so play_next() can also send cards later
-        assistant_client.bot_ref = client
 
         await send_now_playing_card(client, chat_id, song)
         logger.info(f"✅ VC PLAYING: {song['title']} in chat {chat_id}")
@@ -266,10 +266,14 @@ async def cb_stop(client: Bot, callback: CallbackQuery):
     try:
         await assistant_client.call_py.leave_call(chat_id)
         await callback.answer("⏹️ Stopped")
-        await callback.message.edit_caption(
-            callback.message.caption + "\n\n⏹️ **Stopped.**",
-            reply_markup=None
-        )
+        try:
+            await callback.message.edit_caption(
+                (callback.message.caption or "") + "\n\n⏹️ **Stopped.**",
+                reply_markup=None
+            )
+        except Exception:
+            pass
+        now_playing_msg.pop(chat_id, None)
     except Exception as e:
         await callback.answer(f"❌ {e}", show_alert=True)
 
@@ -297,6 +301,7 @@ async def voice_skip(client: Bot, message: Message):
         try:
             await assistant_client.call_py.leave_call(chat_id)
             active_chats.discard(chat_id)
+            paused_chats.discard(chat_id)
         except Exception:
             pass
         return
@@ -315,6 +320,7 @@ async def voice_stop(client: Bot, message: Message):
     try:
         await assistant_client.call_py.leave_call(chat_id)
         await message.reply("⏹️ **Left the voice chat.** Queue cleared.")
+        now_playing_msg.pop(chat_id, None)
     except Exception as e:
         await message.reply(f"❌ **Error:** `{e}`")
 
