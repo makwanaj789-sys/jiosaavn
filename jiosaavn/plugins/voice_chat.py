@@ -1,5 +1,6 @@
 import os
 import random
+import asyncio
 import logging
 from collections import defaultdict
 from pyrogram import filters
@@ -32,23 +33,74 @@ now_playing_msg = {}
 last_action_user = {}
 now_playing_song = {}
 
+# 🔥 Tracks the polling task watching each chat's playback
+monitor_tasks = {}
+
 
 def set_assistant(app: Assistant):
     global assistant_client
     assistant_client = app
-    logger.info(f"🔧 set_assistant CALLED — assistant_client set")
+    logger.info("🔧 set_assistant CALLED — assistant_client set")
 
     @app.call_py.on_update(pytgcalls_filters.stream_end)
     async def on_stream_end(client, update: Update):
         logger.info(f"🔔 STREAM_END EVENT FIRED: chat_id={getattr(update, 'chat_id', 'N/A')}, type={type(update)}")
         if isinstance(update, StreamEnded):
             chat_id = update.chat_id
-            logger.info(f"🔔 Queue for {chat_id}: {[s['title'] for s in queues[chat_id]]}")
             await play_next(chat_id)
-        else:
-            logger.warning(f"🔔 Update was NOT StreamEnded instance: {update}")
 
-    logger.info(f"🔧 on_stream_end handler registered")
+    logger.info("🔧 on_stream_end handler registered")
+
+
+def cancel_monitor(chat_id: int):
+    task = monitor_tasks.pop(chat_id, None)
+    if task and not task.done():
+        task.cancel()
+
+
+async def monitor_playback(chat_id: int, duration: int):
+    """
+    Polls playback position since the stream_end event doesn't reliably
+    fire in all setups. Triggers play_next() once the track finishes.
+    """
+    if not duration or duration <= 0:
+        duration = 300  # fallback assumption: 5 minutes
+
+    check_interval = 3
+    elapsed_checks = 0
+    max_checks = (duration // check_interval) + 20  # safety buffer
+
+    try:
+        while elapsed_checks < max_checks:
+            await asyncio.sleep(check_interval)
+            elapsed_checks += 1
+
+            active_calls = await assistant_client.call_py.calls
+            if chat_id not in active_calls:
+                logger.info(f"🔍 MONITOR: chat {chat_id} no longer in active calls")
+                break
+
+            position_ms = await assistant_client.call_py.time(chat_id)
+            position_sec = position_ms / 1000
+
+            if position_sec >= duration - 1:
+                logger.info(f"🔍 MONITOR: chat {chat_id} finished ({position_sec:.1f}s / {duration}s)")
+                break
+
+    except asyncio.CancelledError:
+        logger.info(f"🔍 MONITOR: cancelled for chat {chat_id}")
+        return
+    except Exception as e:
+        logger.warning(f"🔍 MONITOR error for {chat_id}: {e}")
+
+    monitor_tasks.pop(chat_id, None)
+    await play_next(chat_id)
+
+
+def start_monitor(chat_id: int, duration: int):
+    cancel_monitor(chat_id)
+    task = asyncio.create_task(monitor_playback(chat_id, duration))
+    monitor_tasks[chat_id] = task
 
 
 async def get_song_ready(query: str, db):
@@ -139,7 +191,6 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
             )
             os.remove(card_path)
         else:
-            # 🔥 Fallback to hqdefault (always exists) instead of maxresdefault
             fallback_thumb = song["thumbnail"].replace("maxresdefault", "hqdefault")
             msg = await client.send_photo(
                 chat_id=chat_id,
@@ -151,7 +202,6 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
         now_playing_song[chat_id] = song
     except Exception as e:
         logger.error(f"send_now_playing_card error: {e}")
-        # 🔥 Last resort: send as text message so playback still shows something
         try:
             msg = await client.send_message(
                 chat_id=chat_id,
@@ -171,6 +221,8 @@ async def play_next(chat_id: int):
             await old_msg.delete()
         except Exception:
             pass
+
+    cancel_monitor(chat_id)
 
     if not queues[chat_id]:
         active_chats.discard(chat_id)
@@ -197,6 +249,9 @@ async def play_next(chat_id: int):
         if assistant_client.bot_ref:
             started_by = last_action_user.get(chat_id, {}).get("play")
             await send_now_playing_card(assistant_client.bot_ref, chat_id, song, started_by)
+
+        start_monitor(chat_id, song.get("duration", 0))
+
         logger.info(f"✅ VC AUTO-PLAYING NEXT: {song['title']} in {chat_id}")
     except Exception as e:
         logger.error(f"play_next error: {e}")
@@ -265,6 +320,9 @@ async def voice_play(client: Bot, message: Message):
         await status_msg.delete()
 
         await send_now_playing_card(client, chat_id, song, requester)
+
+        start_monitor(chat_id, song.get("duration", 0))
+
         logger.info(f"✅ VC PLAYING: {song['title']} in chat {chat_id}")
 
     except Exception as e:
@@ -344,6 +402,9 @@ async def voice_shuffle(client: Bot, message: Message):
         await status_msg.delete()
 
         await send_now_playing_card(client, chat_id, song, started_by)
+
+        start_monitor(chat_id, song.get("duration", 0))
+
         logger.info(f"✅ SHUFFLE PLAYING: {song['title']} in chat {chat_id}")
 
     except Exception as e:
@@ -384,6 +445,7 @@ async def cb_skip(client: Bot, callback: CallbackQuery):
 
     if not queues[chat_id]:
         await callback.message.reply(f"📭 **Queue is empty.** Skipped by {skipper}")
+        cancel_monitor(chat_id)
         try:
             await assistant_client.call_py.leave_call(chat_id)
             active_chats.discard(chat_id)
@@ -411,6 +473,7 @@ async def cb_stop(client: Bot, callback: CallbackQuery):
     active_chats.discard(chat_id)
     paused_chats.discard(chat_id)
     now_playing_song.pop(chat_id, None)
+    cancel_monitor(chat_id)
 
     try:
         await assistant_client.call_py.leave_call(chat_id)
@@ -473,6 +536,7 @@ async def voice_skip(client: Bot, message: Message):
 
     if not queues[chat_id]:
         await message.reply("📭 **Queue is empty, nothing to skip to.**")
+        cancel_monitor(chat_id)
         try:
             await assistant_client.call_py.leave_call(chat_id)
             active_chats.discard(chat_id)
@@ -493,6 +557,7 @@ async def voice_stop(client: Bot, message: Message):
     active_chats.discard(chat_id)
     paused_chats.discard(chat_id)
     now_playing_song.pop(chat_id, None)
+    cancel_monitor(chat_id)
 
     try:
         await assistant_client.call_py.leave_call(chat_id)
