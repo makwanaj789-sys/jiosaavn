@@ -534,14 +534,30 @@ async def cb_fav(client: Bot, callback: CallbackQuery):
 
     try:
         favorites = FavoritesManager(client.db)
-        await favorites.add(
-            user_id=user_id,
-            video_id=song["video_id"],
-            title=song["title"],
-            file_id="",
-            uploader=song.get("uploader", "")
-        )
-        await callback.answer(f"❤️ '{song['title'][:30]}' added to your favorites!", show_alert=False)
+        video_id = song["video_id"]
+
+        # 🔥 Toggle: check this specific user's favorite status
+        already_fav = await favorites.is_favorite(user_id, video_id)
+
+        if already_fav:
+            await favorites.remove(user_id, video_id)
+            await callback.answer(
+                f"💔 Removed '{song['title'][:30]}' from your favorites",
+                show_alert=True
+            )
+        else:
+            await favorites.add(
+                user_id=user_id,
+                video_id=video_id,
+                title=song["title"],
+                file_id="",
+                uploader=song.get("uploader", "")
+            )
+            await callback.answer(
+                f"❤️ Added '{song['title'][:30]}' to your favorites!",
+                show_alert=True
+            )
+
     except Exception as e:
         logger.error(f"cb_fav error: {e}")
         await callback.answer(f"❌ {e}", show_alert=True)
