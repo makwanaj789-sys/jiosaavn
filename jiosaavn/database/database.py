@@ -43,6 +43,13 @@ class Database:
         self.favorites_db = self._client["jiosaavnV2_favorites"]
         self.favorites = self.favorites_db.favorites
 
+        # =====================================================
+        # VOICE CHAT LOCAL FILE CACHE
+        # =====================================================
+
+        self.vc_cache_db = self._client["jiosaavnV2_vc_cache"]
+        self.vc_file_cache = self.vc_cache_db.vc_file_cache
+
     # =========================================================
     # USER DATABASE
     # =========================================================
@@ -67,113 +74,47 @@ class Database:
         }
 
     async def is_user_exist(self, user_id: int) -> bool:
-        """
-        Checks if a user exists in the database.
-        """
-
-        user = await self.user_collection.find_one(
-            {"id": user_id}
-        )
-
+        user = await self.user_collection.find_one({"id": user_id})
         return bool(user)
 
     async def add_user(self, user_id: int):
-        """
-        Adds a new user to the database.
-        """
-
         user = self.new_user(user_id)
-
         await self.user_collection.insert_one(user)
-
         return user
 
     async def get_user(self, user_id: int) -> dict:
-        """
-        Retrieves a user from the database.
-        """
-
-        user = await self.user_collection.find_one(
-            {"id": user_id}
-        )
-
+        user = await self.user_collection.find_one({"id": user_id})
         if not user:
             user = await self.add_user(user_id)
-
         return user
 
-    async def update_user(
-        self,
-        user_id: int,
-        key: str,
-        value: any
-    ):
-        """
-        Updates a user's information.
-        """
-
+    async def update_user(self, user_id: int, key: str, value: any):
         await self.user_collection.update_one(
             {"id": user_id},
-            {
-                "$set": {
-                    key: value
-                }
-            }
+            {"$set": {key: value}}
         )
 
     # =========================================================
     # SONG DATABASE
     # =========================================================
 
-    async def is_song_id_exist(
-        self,
-        item_id: str
-    ) -> bool:
-        """
-        Checks if a song ID exists.
-        """
-
-        item = await self.id_collection.find_one(
-            {"id": item_id}
-        )
+    async def is_song_id_exist(self, item_id: str) -> bool:
+        item = await self.id_collection.find_one({"id": item_id})
 
         if not item:
-
-            await self.id_collection.insert_one(
-                {
-                    "id": item_id,
-                    "chat_id": 0,
-                    "message_id": 0
-                }
-            )
+            await self.id_collection.insert_one({
+                "id": item_id,
+                "chat_id": 0,
+                "message_id": 0
+            })
 
         return bool(item)
 
-    async def get_song(
-        self,
-        song_id: str
-    ) -> dict:
-        """
-        Retrieves a song from the database.
-        """
-
-        song = await self.id_collection.find_one(
-            {"id": song_id}
-        )
-
+    async def get_song(self, song_id: str) -> dict:
+        song = await self.id_collection.find_one({"id": song_id})
         return song
 
-    async def update_song(
-        self,
-        song_id: str,
-        quality: str,
-        chat_id: int,
-        message_id: int
-    ):
-        """
-        Updates a song's information.
-        """
-
+    async def update_song(self, song_id: str, quality: str, chat_id: int, message_id: int):
         update_fields = {
             f"{quality}.chat_id": chat_id,
             f"{quality}.message_id": message_id
@@ -181,59 +122,31 @@ class Database:
 
         await self.id_collection.update_one(
             {"id": song_id},
-            {
-                "$set": update_fields
-            }
+            {"$set": update_fields}
         )
 
     # =========================================================
     # SEARCH ANALYTICS
     # =========================================================
 
-    async def add_search(
-        self,
-        user_id: int,
-        chat_id: int = 0
-    ):
-        """
-        Records one music search.
-
-        We intentionally don't store the search text/query because
-        the admin only needs aggregate statistics.
-        """
-
-        await self.search_collection.insert_one(
-            {
-                "user_id": user_id,
-                "chat_id": chat_id,
-                "created_at": datetime.datetime.now(
-                    datetime.timezone.utc
-                )
-            }
-        )
+    async def add_search(self, user_id: int, chat_id: int = 0):
+        await self.search_collection.insert_one({
+            "user_id": user_id,
+            "chat_id": chat_id,
+            "created_at": datetime.datetime.now(datetime.timezone.utc)
+        })
 
     # =========================================================
     # GROUP TRACKING
     # =========================================================
 
-    async def add_group(
-        self,
-        group_id: int
-    ):
-        """
-        Saves a group only once.
-        """
-
+    async def add_group(self, group_id: int):
         await self.group_collection.update_one(
-            {
-                "id": group_id
-            },
+            {"id": group_id},
             {
                 "$setOnInsert": {
                     "id": group_id,
-                    "added_on": datetime.datetime.now(
-                        datetime.timezone.utc
-                    )
+                    "added_on": datetime.datetime.now(datetime.timezone.utc)
                 }
             },
             upsert=True
@@ -244,47 +157,20 @@ class Database:
     # =========================================================
 
     async def get_admin_stats(self) -> dict:
-        """
-        Returns statistics for the admin panel.
-        """
+        now = datetime.datetime.now(datetime.timezone.utc)
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        now = datetime.datetime.now(
-            datetime.timezone.utc
-        )
-
-        today = now.replace(
-            hour=0,
-            minute=0,
-            second=0,
-            microsecond=0
-        )
-
-        # Total unique users already stored by Aarti
         total_users = await self.user_collection.count_documents({})
-
-        # Total groups tracked
         total_groups = await self.group_collection.count_documents({})
-
-        # Total music searches
         total_searches = await self.search_collection.count_documents({})
 
-        # Searches since 00:00 UTC
-        searches_today = await self.search_collection.count_documents(
-            {
-                "created_at": {
-                    "$gte": today
-                }
-            }
-        )
+        searches_today = await self.search_collection.count_documents({
+            "created_at": {"$gte": today}
+        })
 
-        # Unique users who searched today
         active_users_today = await self.search_collection.distinct(
             "user_id",
-            {
-                "created_at": {
-                    "$gte": today
-                }
-            }
+            {"created_at": {"$gte": today}}
         )
 
         return {
