@@ -96,11 +96,13 @@ def now_playing_markup(is_paused=False):
                 callback_data="vc_resume" if is_paused else "vc_pause"
             ),
             InlineKeyboardButton("⏭️ Skip", callback_data="vc_skip"),
-            InlineKeyboardButton("⏹️ Stop", callback_data="vc_stop"),
         ],
         [
             InlineKeyboardButton("🔵 Queue", callback_data="vc_queue"),
-            InlineKeyboardButton("❤️ Add to Favorites", callback_data="vc_fav")
+            InlineKeyboardButton("❤️ Favorite", callback_data="vc_fav")
+        ],
+        [
+            InlineKeyboardButton("⏹️ Stop", callback_data="vc_stop"),
         ]
     ])
 
