@@ -51,6 +51,35 @@ def set_assistant(app: Assistant):
     logger.info("🔧 on_stream_end handler registered")
 
 
+async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
+    """
+    Makes sure the assistant account is a member of the chat.
+    If not, the bot (which must be admin) creates an invite link
+    and the assistant joins using it.
+    """
+    try:
+        assistant_id = (await assistant_client.app.get_me()).id
+
+        try:
+            await client.get_chat_member(chat_id, assistant_id)
+            return True  # Already a member
+        except Exception:
+            pass  # Not a member — proceed to invite
+
+        logger.info(f"🔗 Assistant not in chat {chat_id}, generating invite link...")
+
+        invite_link = await client.export_chat_invite_link(chat_id)
+        await assistant_client.app.join_chat(invite_link)
+        logger.info(f"✅ Assistant joined chat {chat_id}")
+
+        await asyncio.sleep(2)
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ ensure_assistant_in_chat failed for {chat_id}: {e}")
+        return False
+
+
 def get_audio_duration(filepath: str) -> int:
     """
     Returns the real duration of the audio file in seconds using ffprobe.
@@ -324,6 +353,14 @@ async def voice_play(client: Bot, message: Message):
 
         await status_msg.edit_text("📞 **Joining voice chat...**")
 
+        joined = await ensure_assistant_in_chat(client, chat_id)
+        if not joined:
+            await status_msg.edit_text(
+                "❌ **Couldn't add the assistant to this group.**\n\n"
+                "Make sure the bot is an **admin** with permission to invite users."
+            )
+            return
+
         await assistant_client.call_py.play(
             chat_id,
             MediaStream(
@@ -407,6 +444,14 @@ async def voice_shuffle(client: Bot, message: Message):
 
         active_chats.discard(chat_id)
         await status_msg.edit_text("📞 **Joining voice chat...**")
+
+        joined = await ensure_assistant_in_chat(client, chat_id)
+        if not joined:
+            await status_msg.edit_text(
+                "❌ **Couldn't add the assistant to this group.**\n\n"
+                "Make sure the bot is an **admin** with permission to invite users."
+            )
+            return
 
         await assistant_client.call_py.play(
             chat_id,
@@ -536,7 +581,6 @@ async def cb_fav(client: Bot, callback: CallbackQuery):
         favorites = FavoritesManager(client.db)
         video_id = song["video_id"]
 
-        # 🔥 Toggle: check this specific user's favorite status
         already_fav = await favorites.is_favorite(user_id, video_id)
 
         if already_fav:
@@ -577,39 +621,4 @@ async def voice_skip(client: Bot, message: Message):
             now_playing_song.pop(chat_id, None)
         except Exception:
             pass
-        return
-
-    await message.reply("⏭️ **Skipping...**")
-    await play_next(chat_id)
-
-
-@Bot.on_message(filters.command("vstop") & filters.group)
-async def voice_stop(client: Bot, message: Message):
-    chat_id = message.chat.id
-    queues[chat_id].clear()
-    active_chats.discard(chat_id)
-    paused_chats.discard(chat_id)
-    now_playing_song.pop(chat_id, None)
-    cancel_monitor(chat_id)
-
-    try:
-        await assistant_client.call_py.leave_call(chat_id)
-        await message.reply(f"⏹️ **Left the voice chat.** Queue cleared by {user_mention(message)}")
-        now_playing_msg.pop(chat_id, None)
-    except Exception as e:
-        await message.reply(f"❌ **Error:** `{e}`")
-
-
-@Bot.on_message(filters.command("vqueue") & filters.group)
-async def voice_queue(client: Bot, message: Message):
-    chat_id = message.chat.id
-
-    if not queues[chat_id]:
-        await message.reply("📭 **Queue is empty.**")
-        return
-
-    text = "📋 **Current Queue**\n\n"
-    for i, song in enumerate(queues[chat_id], start=1):
-        text += f"**{i}.** 🎵 {song['title']}\n"
-
-    await message.reply(text)
+     
