@@ -10,10 +10,14 @@ logger = logging.getLogger(__name__)
 
 def generate_now_playing_card(thumbnail_url: str, title: str, artist: str) -> str:
     try:
-        # Try maxresdefault first for best quality, fallback to hqdefault
         response = requests.get(thumbnail_url, timeout=10)
+        if response.status_code != 200:
+            # Fallback to hqdefault if maxresdefault doesn't exist
+            fallback_url = thumbnail_url.replace("maxresdefault", "hqdefault")
+            response = requests.get(fallback_url, timeout=10)
         response.raise_for_status()
         original = Image.open(io.BytesIO(response.content)).convert("RGB")
+        # ... baaki same rahega
 
         # Full HD canvas — matches native thumbnail resolution
         canvas_size = (1280, 720)
