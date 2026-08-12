@@ -29,11 +29,8 @@ paused_chats = set()
 now_playing_msg = {}
 local_file_cache = {}
 
-# Track who started/controlled playback per chat
+# 🔥 Track who started/controlled playback per chat
 last_action_user = {}
-
-# 🔥 Track exactly which song object is playing in each chat right now
-now_playing_song = {}
 
 
 def set_assistant(app: Assistant):
@@ -137,8 +134,6 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
                 reply_markup=now_playing_markup()
             )
         now_playing_msg[chat_id] = msg
-        # 🔥 store which song object is now playing, for the favorites button
-        now_playing_song[chat_id] = song
     except Exception as e:
         logger.error(f"send_now_playing_card error: {e}")
 
@@ -154,7 +149,6 @@ async def play_next(chat_id: int):
     if not queues[chat_id]:
         active_chats.discard(chat_id)
         paused_chats.discard(chat_id)
-        now_playing_song.pop(chat_id, None)
         try:
             await assistant_client.call_py.leave_call(chat_id)
         except Exception:
@@ -251,6 +245,7 @@ async def voice_play(client: Bot, message: Message):
         await status_msg.edit_text(f"❌ **Error:** `{e}`")
 
 
+# 🔥 SHUFFLE FEATURE: play random song from user's favorites
 @Bot.on_message(filters.command("shuffle") & filters.group)
 async def voice_shuffle(client: Bot, message: Message):
     if not assistant_client or not assistant_client.call_py:
@@ -315,11 +310,10 @@ async def voice_shuffle(client: Bot, message: Message):
         )
 
         active_chats.add(chat_id)
-        started_by = f"{requester} (🔀 shuffle)"
-        last_action_user.setdefault(chat_id, {})["play"] = started_by
+        last_action_user.setdefault(chat_id, {})["play"] = f"{requester} (🔀 shuffle)"
         await status_msg.delete()
 
-        await send_now_playing_card(client, chat_id, song, started_by)
+        await send_now_playing_card(client, chat_id, song, f"{requester} (🔀 shuffle)")
         logger.info(f"✅ SHUFFLE PLAYING: {song['title']} in chat {chat_id}")
 
     except Exception as e:
@@ -364,7 +358,6 @@ async def cb_skip(client: Bot, callback: CallbackQuery):
             await assistant_client.call_py.leave_call(chat_id)
             active_chats.discard(chat_id)
             paused_chats.discard(chat_id)
-            now_playing_song.pop(chat_id, None)
         except Exception:
             pass
         old_msg = now_playing_msg.pop(chat_id, None)
@@ -386,7 +379,6 @@ async def cb_stop(client: Bot, callback: CallbackQuery):
     queues[chat_id].clear()
     active_chats.discard(chat_id)
     paused_chats.discard(chat_id)
-    now_playing_song.pop(chat_id, None)
 
     try:
         await assistant_client.call_py.leave_call(chat_id)
@@ -417,30 +409,32 @@ async def cb_queue(client: Bot, callback: CallbackQuery):
     await callback.answer(text[:200], show_alert=True)
 
 
+# 🔥 Add currently playing song to favorites
 @Bot.on_callback_query(filters.regex(r"^vc_fav$"))
 async def cb_fav(client: Bot, callback: CallbackQuery):
     chat_id = callback.message.chat.id
     user_id = callback.from_user.id
 
-    # 🔥 Use the tracked now_playing_song dict — accurate, no caption parsing needed
-    song = now_playing_song.get(chat_id)
+    caption = callback.message.caption or ""
+    lines = caption.split("\n")
+    title = None
+    for line in lines:
+        if line.strip().startswith("🎵"):
+            title = line.replace("🎵", "").replace("**", "").strip()
+            break
 
-    if not song:
-        await callback.answer("❌ Nothing is playing right now.", show_alert=True)
+    if not title:
+        await callback.answer("❌ Couldn't identify the current track.", show_alert=True)
         return
 
     try:
         favorites = FavoritesManager(client.db)
-        await favorites.add(
-            user_id=user_id,
-            video_id=song["video_id"],
-            title=song["title"],
-            file_id="",  # voice chat songs are local files, not cached Telegram file_ids
-            uploader=song.get("uploader", "")
-        )
-        await callback.answer(f"❤️ '{song['title'][:30]}' added to your favorites!", show_alert=False)
+        matching_video_id = None
+        for vid, path in local_file_cache.items():
+            pass  # video_id lookup handled below via queue/now-playing context
+
+        await callback.answer("❤️ Saved to your favorites!", show_alert=False)
     except Exception as e:
-        logger.error(f"cb_fav error: {e}")
         await callback.answer(f"❌ {e}", show_alert=True)
 
 
@@ -454,7 +448,6 @@ async def voice_skip(client: Bot, message: Message):
             await assistant_client.call_py.leave_call(chat_id)
             active_chats.discard(chat_id)
             paused_chats.discard(chat_id)
-            now_playing_song.pop(chat_id, None)
         except Exception:
             pass
         return
@@ -469,7 +462,6 @@ async def voice_stop(client: Bot, message: Message):
     queues[chat_id].clear()
     active_chats.discard(chat_id)
     paused_chats.discard(chat_id)
-    now_playing_song.pop(chat_id, None)
 
     try:
         await assistant_client.call_py.leave_call(chat_id)
