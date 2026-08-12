@@ -197,7 +197,10 @@ async def voice_play(client: Bot, message: Message):
             await status_msg.edit_text("❌ **Couldn't find or download that song.**")
             return
 
-        if chat_id in active_chats:
+        # 🔥 FIX: real status check karo, sirf local set pe depend mat karo
+        is_actually_active = chat_id in assistant_client.call_py.calls
+
+        if is_actually_active:
             queues[chat_id].append(song)
             await status_msg.edit_text(
                 f"➕ **Added to Queue!**\n\n"
@@ -206,6 +209,9 @@ async def voice_play(client: Bot, message: Message):
                 f"✅ Pre-downloaded, ready for instant playback"
             )
             return
+
+        # Agar local set out-of-sync tha, clean kar do
+        active_chats.discard(chat_id)
 
         await status_msg.edit_text("📞 **Joining voice chat...**")
 
