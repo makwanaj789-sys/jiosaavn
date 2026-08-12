@@ -1,4 +1,6 @@
+import os
 import logging
+import asyncio
 from collections import defaultdict
 from pyrogram import filters
 from pyrogram.types import (
@@ -14,23 +16,22 @@ from pytgcalls.types.stream import StreamEnded
 from jiosaavn.bot import Bot
 from jiosaavn.assistant import Assistant
 from api.search_engine import SearchEngine
+from api.thumbnail import generate_now_playing_card
 
 logger = logging.getLogger(__name__)
 
 assistant_client: Assistant = None
 
 # Queue system: each chat has its own list of pending songs
-# format: {chat_id: [{"video_id": ..., "title": ..., "filepath": ...}, ...]}
 queues = defaultdict(list)
 
 # Tracks which chats currently have an active stream
 active_chats = set()
-
-# Tracks pause state per chat
 paused_chats = set()
-
-# Tracks the "Now Playing" message per chat (to edit/delete later)
 now_playing_msg = {}
+
+# 🔥 Local disk cache: video_id -> filepath (so we never re-download)
+local_file_cache = {}
 
 
 def set_assistant(app: Assistant):
@@ -44,7 +45,12 @@ def set_assistant(app: Assistant):
             await play_next(chat_id)
 
 
-async def download_and_get_info(query: str):
+async def get_song_ready(query: str):
+    """
+    Returns song info with a guaranteed-downloaded local filepath.
+    Uses local_file_cache to skip re-downloading if already fetched
+    during this bot session.
+    """
     engine = SearchEngine()
     response = await engine.search(query)
     results = response.get("results", [])
@@ -56,13 +62,18 @@ async def download_and_get_info(query: str):
     title = results[0].get("title", "Unknown")
     duration = results[0].get("duration", 0)
     uploader = results[0].get("uploader", "Unknown Artist")
-
-    result = await engine.download_song(video_id)
-    if not result or not result.get("success"):
-        return None
-
-    filepath = result["data"]["filepath"]
     thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+
+    # 🔥 Check local cache first — instant if already downloaded
+    if video_id in local_file_cache and os.path.exists(local_file_cache[video_id]):
+        filepath = local_file_cache[video_id]
+        logger.info(f"⚡ LOCAL CACHE HIT: {title}")
+    else:
+        result = await engine.download_song(video_id)
+        if not result or not result.get("success"):
+            return None
+        filepath = result["data"]["filepath"]
+        local_file_cache[video_id] = filepath
 
     return {
         "video_id": video_id,
@@ -105,13 +116,26 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict):
         f"⏱ {format_duration(song.get('duration'))}"
     )
 
+    card_path = generate_now_playing_card(
+        song["thumbnail"], song["title"], song.get("uploader", "Unknown")
+    )
+
     try:
-        msg = await client.send_photo(
-            chat_id=chat_id,
-            photo=song["thumbnail"],
-            caption=caption,
-            reply_markup=now_playing_markup()
-        )
+        if card_path and os.path.exists(card_path):
+            msg = await client.send_photo(
+                chat_id=chat_id,
+                photo=card_path,
+                caption=caption,
+                reply_markup=now_playing_markup()
+            )
+            os.remove(card_path)
+        else:
+            msg = await client.send_photo(
+                chat_id=chat_id,
+                photo=song["thumbnail"],
+                caption=caption,
+                reply_markup=now_playing_markup()
+            )
         now_playing_msg[chat_id] = msg
     except Exception as e:
         logger.error(f"send_now_playing_card error: {e}")
@@ -170,7 +194,7 @@ async def voice_play(client: Bot, message: Message):
     status_msg = await message.reply("🔎 **Searching & preparing your track...**")
 
     try:
-        song = await download_and_get_info(query)
+        song = await get_song_ready(query)
         if not song:
             await status_msg.edit_text("❌ **Couldn't find or download that song.**")
             return
@@ -180,7 +204,8 @@ async def voice_play(client: Bot, message: Message):
             await status_msg.edit_text(
                 f"➕ **Added to Queue!**\n\n"
                 f"🎵 **Track:** {song['title']}\n"
-                f"📍 **Position:** #{len(queues[chat_id])}"
+                f"📍 **Position:** #{len(queues[chat_id])}\n"
+                f"✅ Pre-downloaded, ready for instant playback"
             )
             return
 
