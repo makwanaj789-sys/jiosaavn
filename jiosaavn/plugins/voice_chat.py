@@ -2,6 +2,7 @@ import os
 import random
 import asyncio
 import logging
+import subprocess
 from collections import defaultdict
 from pyrogram import filters
 from pyrogram.types import (
@@ -32,8 +33,6 @@ now_playing_msg = {}
 
 last_action_user = {}
 now_playing_song = {}
-
-# 🔥 Tracks the polling task watching each chat's playback
 monitor_tasks = {}
 
 
@@ -44,12 +43,36 @@ def set_assistant(app: Assistant):
 
     @app.call_py.on_update(pytgcalls_filters.stream_end)
     async def on_stream_end(client, update: Update):
-        logger.info(f"🔔 STREAM_END EVENT FIRED: chat_id={getattr(update, 'chat_id', 'N/A')}, type={type(update)}")
+        logger.info(f"🔔 STREAM_END EVENT FIRED: chat_id={getattr(update, 'chat_id', 'N/A')}")
         if isinstance(update, StreamEnded):
             chat_id = update.chat_id
             await play_next(chat_id)
 
     logger.info("🔧 on_stream_end handler registered")
+
+
+def get_audio_duration(filepath: str) -> int:
+    """
+    Returns the real duration of the audio file in seconds using ffprobe.
+    Far more reliable than YouTube search metadata.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                filepath
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        duration = float(result.stdout.strip())
+        return int(duration)
+    except Exception as e:
+        logger.warning(f"ffprobe duration error for {filepath}: {e}")
+        return 0
 
 
 def cancel_monitor(chat_id: int):
@@ -58,43 +81,28 @@ def cancel_monitor(chat_id: int):
         task.cancel()
 
 
-async def monitor_playback(chat_id: int, duration: int):
+async def monitor_playback(chat_id: int, filepath: str):
     """
-    Polls playback position. Detects track end either by reaching
-    the known duration or by position no longer advancing.
+    Waits for the exact duration of the audio file, then plays the next track.
     """
-    check_interval = 2
-    last_position = -1
-    stalled_checks = 0
-    max_total_checks = 600  # ~20 minutes safety cap
+    duration = get_audio_duration(filepath)
+
+    if duration <= 0:
+        logger.warning(f"🔍 MONITOR: couldn't determine duration for {filepath}, using fallback")
+        duration = 300
+
+    logger.info(f"🔍 MONITOR: watching chat {chat_id} for {duration}s")
 
     try:
-        for _ in range(max_total_checks):
-            await asyncio.sleep(check_interval)
+        await asyncio.sleep(duration + 1)
 
-            active_calls = await assistant_client.call_py.calls
-            if chat_id not in active_calls:
-                logger.info(f"🔍 MONITOR: chat {chat_id} no longer in active calls")
-                break
+        active_calls = await assistant_client.call_py.calls
+        if chat_id not in active_calls:
+            logger.info(f"🔍 MONITOR: chat {chat_id} left the call during playback")
+            monitor_tasks.pop(chat_id, None)
+            return
 
-            position_ms = await assistant_client.call_py.time(chat_id)
-            position_sec = position_ms / 1000
-
-            # Reached known duration
-            if duration and duration > 0 and position_sec >= duration - 1:
-                logger.info(f"🔍 MONITOR: chat {chat_id} reached duration ({position_sec:.1f}s / {duration}s)")
-                break
-
-            # Position stopped advancing — track likely ended
-            if abs(position_sec - last_position) < 0.5:
-                stalled_checks += 1
-                if stalled_checks >= 2:
-                    logger.info(f"🔍 MONITOR: chat {chat_id} position stalled at {position_sec:.1f}s — treating as finished")
-                    break
-            else:
-                stalled_checks = 0
-
-            last_position = position_sec
+        logger.info(f"🔍 MONITOR: track finished in chat {chat_id}, moving to next")
 
     except asyncio.CancelledError:
         logger.info(f"🔍 MONITOR: cancelled for chat {chat_id}")
@@ -106,9 +114,9 @@ async def monitor_playback(chat_id: int, duration: int):
     await play_next(chat_id)
 
 
-def start_monitor(chat_id: int, duration: int):
+def start_monitor(chat_id: int, filepath: str):
     cancel_monitor(chat_id)
-    task = asyncio.create_task(monitor_playback(chat_id, duration))
+    task = asyncio.create_task(monitor_playback(chat_id, filepath))
     monitor_tasks[chat_id] = task
 
 
@@ -259,7 +267,7 @@ async def play_next(chat_id: int):
             started_by = last_action_user.get(chat_id, {}).get("play")
             await send_now_playing_card(assistant_client.bot_ref, chat_id, song, started_by)
 
-        start_monitor(chat_id, song.get("duration", 0))
+        start_monitor(chat_id, song["filepath"])
 
         logger.info(f"✅ VC AUTO-PLAYING NEXT: {song['title']} in {chat_id}")
     except Exception as e:
@@ -330,7 +338,7 @@ async def voice_play(client: Bot, message: Message):
 
         await send_now_playing_card(client, chat_id, song, requester)
 
-        start_monitor(chat_id, song.get("duration", 0))
+        start_monitor(chat_id, song["filepath"])
 
         logger.info(f"✅ VC PLAYING: {song['title']} in chat {chat_id}")
 
@@ -412,7 +420,7 @@ async def voice_shuffle(client: Bot, message: Message):
 
         await send_now_playing_card(client, chat_id, song, started_by)
 
-        start_monitor(chat_id, song.get("duration", 0))
+        start_monitor(chat_id, song["filepath"])
 
         logger.info(f"✅ SHUFFLE PLAYING: {song['title']} in chat {chat_id}")
 
