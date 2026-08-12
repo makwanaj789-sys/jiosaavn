@@ -1,6 +1,5 @@
 import os
 import logging
-import asyncio
 from collections import defaultdict
 from pyrogram import filters
 from pyrogram.types import (
@@ -30,7 +29,7 @@ active_chats = set()
 paused_chats = set()
 now_playing_msg = {}
 
-# 🔥 Local disk cache: video_id -> filepath (so we never re-download)
+# Local disk cache: video_id -> filepath (so we never re-download)
 local_file_cache = {}
 
 
@@ -64,7 +63,6 @@ async def get_song_ready(query: str):
     uploader = results[0].get("uploader", "Unknown Artist")
     thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
 
-    # 🔥 Check local cache first — instant if already downloaded
     if video_id in local_file_cache and os.path.exists(local_file_cache[video_id]):
         filepath = local_file_cache[video_id]
         logger.info(f"⚡ LOCAL CACHE HIT: {title}")
@@ -211,16 +209,10 @@ async def voice_play(client: Bot, message: Message):
 
         await status_msg.edit_text("📞 **Joining voice chat...**")
 
-        try:
-            await assistant_client.call_py.play(
-                chat_id,
-                MediaStream(song["filepath"])
-            )
-        except Exception:
-            await assistant_client.call_py.change_stream(
-                chat_id,
-                MediaStream(song["filepath"])
-            )
+        await assistant_client.call_py.play(
+            chat_id,
+            MediaStream(song["filepath"])
+        )
 
         active_chats.add(chat_id)
         await status_msg.delete()
