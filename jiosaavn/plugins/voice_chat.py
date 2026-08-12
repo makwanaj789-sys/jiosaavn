@@ -9,7 +9,7 @@ from pyrogram.types import (
     InlineKeyboardButton
 )
 from pytgcalls import filters as pytgcalls_filters
-from pytgcalls.types import MediaStream, Update
+from pytgcalls.types import MediaStream, Update, AudioQuality
 from pytgcalls.types.stream import StreamEnded
 
 from jiosaavn.bot import Bot
@@ -61,7 +61,8 @@ async def get_song_ready(query: str):
     title = results[0].get("title", "Unknown")
     duration = results[0].get("duration", 0)
     uploader = results[0].get("uploader", "Unknown Artist")
-    thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    # 🔥 High-res thumbnail for the now-playing card
+    thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
 
     if video_id in local_file_cache and os.path.exists(local_file_cache[video_id]):
         filepath = local_file_cache[video_id]
@@ -161,7 +162,10 @@ async def play_next(chat_id: int):
     try:
         await assistant_client.call_py.play(
             chat_id,
-            MediaStream(song["filepath"])
+            MediaStream(
+                song["filepath"],
+                audio_parameters=AudioQuality.STUDIO
+            )
         )
         active_chats.add(chat_id)
         paused_chats.discard(chat_id)
@@ -197,7 +201,6 @@ async def voice_play(client: Bot, message: Message):
             await status_msg.edit_text("❌ **Couldn't find or download that song.**")
             return
 
-        # 🔥 FIX: real status check karo, sirf local set pe depend mat karo
         active_calls = await assistant_client.call_py.calls
         is_actually_active = chat_id in active_calls
 
@@ -211,14 +214,16 @@ async def voice_play(client: Bot, message: Message):
             )
             return
 
-        # Agar local set out-of-sync tha, clean kar do
         active_chats.discard(chat_id)
 
         await status_msg.edit_text("📞 **Joining voice chat...**")
 
         await assistant_client.call_py.play(
             chat_id,
-            MediaStream(song["filepath"])
+            MediaStream(
+                song["filepath"],
+                audio_parameters=AudioQuality.STUDIO
+            )
         )
 
         active_chats.add(chat_id)
