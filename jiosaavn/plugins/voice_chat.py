@@ -621,4 +621,39 @@ async def voice_skip(client: Bot, message: Message):
             now_playing_song.pop(chat_id, None)
         except Exception:
             pass
-     
+        return
+
+    await message.reply("⏭️ **Skipping...**")
+    await play_next(chat_id)
+
+
+@Bot.on_message(filters.command("vstop") & filters.group)
+async def voice_stop(client: Bot, message: Message):
+    chat_id = message.chat.id
+    queues[chat_id].clear()
+    active_chats.discard(chat_id)
+    paused_chats.discard(chat_id)
+    now_playing_song.pop(chat_id, None)
+    cancel_monitor(chat_id)
+
+    try:
+        await assistant_client.call_py.leave_call(chat_id)
+        await message.reply(f"⏹️ **Left the voice chat.** Queue cleared by {user_mention(message)}")
+        now_playing_msg.pop(chat_id, None)
+    except Exception as e:
+        await message.reply(f"❌ **Error:** `{e}`")
+
+
+@Bot.on_message(filters.command("vqueue") & filters.group)
+async def voice_queue(client: Bot, message: Message):
+    chat_id = message.chat.id
+
+    if not queues[chat_id]:
+        await message.reply("📭 **Queue is empty.**")
+        return
+
+    text = "📋 **Current Queue**\n\n"
+    for i, song in enumerate(queues[chat_id], start=1):
+        text += f"**{i}.** 🎵 {song['title']}\n"
+
+    await message.reply(text)
