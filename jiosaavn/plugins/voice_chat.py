@@ -60,20 +60,17 @@ def cancel_monitor(chat_id: int):
 
 async def monitor_playback(chat_id: int, duration: int):
     """
-    Polls playback position since the stream_end event doesn't reliably
-    fire in all setups. Triggers play_next() once the track finishes.
+    Polls playback position. Detects track end either by reaching
+    the known duration or by position no longer advancing.
     """
-    if not duration or duration <= 0:
-        duration = 300  # fallback assumption: 5 minutes
-
-    check_interval = 3
-    elapsed_checks = 0
-    max_checks = (duration // check_interval) + 20  # safety buffer
+    check_interval = 2
+    last_position = -1
+    stalled_checks = 0
+    max_total_checks = 600  # ~20 minutes safety cap
 
     try:
-        while elapsed_checks < max_checks:
+        for _ in range(max_total_checks):
             await asyncio.sleep(check_interval)
-            elapsed_checks += 1
 
             active_calls = await assistant_client.call_py.calls
             if chat_id not in active_calls:
@@ -83,9 +80,21 @@ async def monitor_playback(chat_id: int, duration: int):
             position_ms = await assistant_client.call_py.time(chat_id)
             position_sec = position_ms / 1000
 
-            if position_sec >= duration - 1:
-                logger.info(f"🔍 MONITOR: chat {chat_id} finished ({position_sec:.1f}s / {duration}s)")
+            # Reached known duration
+            if duration and duration > 0 and position_sec >= duration - 1:
+                logger.info(f"🔍 MONITOR: chat {chat_id} reached duration ({position_sec:.1f}s / {duration}s)")
                 break
+
+            # Position stopped advancing — track likely ended
+            if abs(position_sec - last_position) < 0.5:
+                stalled_checks += 1
+                if stalled_checks >= 2:
+                    logger.info(f"🔍 MONITOR: chat {chat_id} position stalled at {position_sec:.1f}s — treating as finished")
+                    break
+            else:
+                stalled_checks = 0
+
+            last_position = position_sec
 
     except asyncio.CancelledError:
         logger.info(f"🔍 MONITOR: cancelled for chat {chat_id}")
