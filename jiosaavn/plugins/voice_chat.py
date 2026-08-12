@@ -52,27 +52,34 @@ def set_assistant(app: Assistant):
 
 
 async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
-    """
-    Makes sure the assistant account is a member of the chat.
-    If not, the bot (which must be admin) creates an invite link
-    and the assistant joins using it.
-    """
     try:
         assistant_id = (await assistant_client.app.get_me()).id
+        logger.info(f"🔗 Checking if assistant {assistant_id} is in chat {chat_id}")
 
         try:
-            await client.get_chat_member(chat_id, assistant_id)
-            return True  # Already a member
-        except Exception:
-            pass  # Not a member — proceed to invite
+            member = await client.get_chat_member(chat_id, assistant_id)
+            logger.info(f"🔗 Assistant already in chat, status: {member.status}")
+            return True
+        except Exception as e:
+            logger.info(f"🔗 Assistant not in chat ({e}), will invite...")
 
-        logger.info(f"🔗 Assistant not in chat {chat_id}, generating invite link...")
+        # Generate invite link using the BOT (which is admin)
+        try:
+            invite_link = await client.export_chat_invite_link(chat_id)
+            logger.info(f"🔗 Generated invite link: {invite_link}")
+        except Exception as e:
+            logger.error(f"❌ Couldn't generate invite link: {e}")
+            return False
 
-        invite_link = await client.export_chat_invite_link(chat_id)
-        await assistant_client.app.join_chat(invite_link)
-        logger.info(f"✅ Assistant joined chat {chat_id}")
+        # Assistant joins using the link
+        try:
+            await assistant_client.app.join_chat(invite_link)
+            logger.info(f"✅ Assistant joined chat {chat_id}")
+        except Exception as e:
+            logger.error(f"❌ Assistant couldn't join: {e}")
+            return False
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(3)
         return True
 
     except Exception as e:
