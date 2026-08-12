@@ -136,9 +136,11 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
             )
             os.remove(card_path)
         else:
+            # 🔥 Fallback to hqdefault (always exists) instead of maxresdefault
+            fallback_thumb = song["thumbnail"].replace("maxresdefault", "hqdefault")
             msg = await client.send_photo(
                 chat_id=chat_id,
-                photo=song["thumbnail"],
+                photo=fallback_thumb,
                 caption=caption,
                 reply_markup=now_playing_markup()
             )
@@ -146,6 +148,17 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
         now_playing_song[chat_id] = song
     except Exception as e:
         logger.error(f"send_now_playing_card error: {e}")
+        # 🔥 Last resort: send as text message so playback still shows something
+        try:
+            msg = await client.send_message(
+                chat_id=chat_id,
+                text=caption,
+                reply_markup=now_playing_markup()
+            )
+            now_playing_msg[chat_id] = msg
+            now_playing_song[chat_id] = song
+        except Exception as e2:
+            logger.error(f"Fallback text message also failed: {e2}")
 
 
 async def play_next(chat_id: int):
