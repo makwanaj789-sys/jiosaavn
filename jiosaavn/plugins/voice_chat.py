@@ -36,6 +36,7 @@ now_playing_song = {}
 def set_assistant(app: Assistant):
     global assistant_client
     assistant_client = app
+    logger.info(f"🔧 set_assistant CALLED — assistant_client set")
 
     @app.call_py.on_update(pytgcalls_filters.stream_end)
     async def on_stream_end(client, update: Update):
@@ -46,6 +47,8 @@ def set_assistant(app: Assistant):
             await play_next(chat_id)
         else:
             logger.warning(f"🔔 Update was NOT StreamEnded instance: {update}")
+
+    logger.info(f"🔧 on_stream_end handler registered")
 
 
 async def get_song_ready(query: str, db):
