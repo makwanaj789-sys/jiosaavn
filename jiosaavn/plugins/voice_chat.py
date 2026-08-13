@@ -187,6 +187,10 @@ def start_prefetch(chat_id: int):
 
 
 async def monitor_playback(chat_id: int, filepath: str):
+    """
+    Waits for the track to finish, accounting for pauses.
+    Counts down only while playback is actually running.
+    """
     duration = get_audio_duration(filepath)
 
     if duration <= 0:
@@ -195,14 +199,25 @@ async def monitor_playback(chat_id: int, filepath: str):
 
     logger.info(f"🔍 MONITOR: watching chat {chat_id} for {duration}s")
 
-    try:
-        await asyncio.sleep(duration + 1)
+    remaining = duration + 1
+    tick = 1  # check every second
 
-        active_calls = await assistant_client.call_py.calls
-        if chat_id not in active_calls:
-            logger.info(f"🔍 MONITOR: chat {chat_id} left the call during playback")
-            monitor_tasks.pop(chat_id, None)
-            return
+    try:
+        while remaining > 0:
+            await asyncio.sleep(tick)
+
+            # 🔥 Pause-aware: don't count down while paused
+            if chat_id in paused_chats:
+                continue
+
+            remaining -= tick
+
+            # Stop early if the call ended
+            active_calls = await assistant_client.call_py.calls
+            if chat_id not in active_calls:
+                logger.info(f"🔍 MONITOR: chat {chat_id} left the call during playback")
+                monitor_tasks.pop(chat_id, None)
+                return
 
         logger.info(f"🔍 MONITOR: track finished in chat {chat_id}, moving to next")
 
