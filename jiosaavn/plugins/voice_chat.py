@@ -27,9 +27,6 @@ logger = logging.getLogger(__name__)
 
 assistant_client: Assistant = None
 
-# Bass-boosted audio filter for richer sound
-BASS_BOOST_FILTER = "-af bass=g=8,dynaudnorm=f=200"
-
 queues = defaultdict(list)
 active_chats = set()
 paused_chats = set()
@@ -280,13 +277,6 @@ async def get_song_ready(query: str, db):
     }
 
 
-def format_duration(seconds):
-    if not seconds:
-        return "Live"
-    m, s = divmod(int(seconds), 60)
-    return f"{m}:{s:02d}"
-
-
 def now_playing_markup(is_paused=False):
     return InlineKeyboardMarkup([
         [
@@ -307,11 +297,12 @@ def now_playing_markup(is_paused=False):
 
 
 async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_by: str = None):
+    youtube_url = f"https://youtube.com/watch?v={song['video_id']}"
+
     caption = (
         f"**◈ NOW STREAMING ◈**\n\n"
-        f">🎵 **{song['title']}**\n"
-        f">👤 {song.get('uploader', 'Unknown')}\n"
-        f">⏱ `{format_duration(song.get('duration'))}`"
+        f">🎵 [{song['title']}]({youtube_url})\n"
+        f">👤 {song.get('uploader', 'Unknown')}"
     )
 
     if started_by:
@@ -348,7 +339,8 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
             msg = await client.send_message(
                 chat_id=chat_id,
                 text=caption,
-                reply_markup=now_playing_markup()
+                reply_markup=now_playing_markup(),
+                disable_web_page_preview=True
             )
             now_playing_msg[chat_id] = msg
             now_playing_song[chat_id] = song
@@ -395,8 +387,7 @@ async def play_next(chat_id: int):
                     chat_id,
                     MediaStream(
                         song["filepath"],
-                        audio_parameters=AudioQuality.STUDIO,
-                        ffmpeg_parameters=BASS_BOOST_FILTER
+                        audio_parameters=AudioQuality.STUDIO
                     )
                 )
                 active_chats.add(chat_id)
@@ -502,8 +493,7 @@ async def voice_play(client: Bot, message: Message):
             chat_id,
             MediaStream(
                 song["filepath"],
-                audio_parameters=AudioQuality.STUDIO,
-                ffmpeg_parameters=BASS_BOOST_FILTER
+                audio_parameters=AudioQuality.STUDIO
             )
         )
 
@@ -627,8 +617,7 @@ async def voice_shuffle(client: Bot, message: Message):
             chat_id,
             MediaStream(
                 first_song["filepath"],
-                audio_parameters=AudioQuality.STUDIO,
-                ffmpeg_parameters=BASS_BOOST_FILTER
+                audio_parameters=AudioQuality.STUDIO
             )
         )
 
