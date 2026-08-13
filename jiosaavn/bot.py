@@ -9,7 +9,6 @@ from .config.settings import (
 from .app_webpage import start_web, stop_web
 
 from pyrogram import Client
-from pyrogram.handlers import RawUpdateHandler
 from pyrogram.types import (
     BotCommand,
     BotCommandScopeAllPrivateChats
@@ -54,21 +53,6 @@ class Bot(Client):
             logger.info(f"✅ Storage channel resolved: {chat.title}")
         except Exception as e:
             logger.error(f"❌ Could not resolve storage channel {STORAGE_CHAT_ID}: {e}")
-
-        # ================================
-        # RAW UPDATE DEBUG
-        # ================================
-        async def raw_debug_handler(client, update, users, chats):
-            try:
-                logger.info("=" * 80)
-                logger.info(f"RAW TYPE: {type(update).__name__}")
-                logger.info(update)
-                logger.info("=" * 80)
-            except Exception as e:
-                logger.error(f"RAW DEBUG ERROR: {e}")
-
-        self.add_handler(RawUpdateHandler(raw_debug_handler))
-        logger.info("🔬 Raw debug handler registered")
 
         return self
 
