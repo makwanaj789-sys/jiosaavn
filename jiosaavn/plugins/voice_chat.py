@@ -348,17 +348,78 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
             logger.error(f"Fallback text message also failed: {e2}")
 
 
+# Add near the other globals
+play_locks = defaultdict(asyncio.Lock)
+
+
 async def play_next(chat_id: int):
-    old_msg = now_playing_msg.pop(chat_id, None)
-    if old_msg:
-        try:
-            await old_msg.delete()
-        except Exception:
-            pass
+    """
+    Plays the next track. Uses a per-chat lock so rapid skips
+    don't trigger overlapping playback attempts.
+    """
+    async with play_locks[chat_id]:
+        old_msg = now_playing_msg.pop(chat_id, None)
+        if old_msg:
+            try:
+                await old_msg.delete()
+            except Exception:
+                pass
 
-    cancel_monitor(chat_id)
+        cancel_monitor(chat_id)
 
-    if not queues[chat_id]:
+        # 🔥 Loop instead of recursion — skip undownloadable tracks safely
+        while queues[chat_id]:
+            song = queues[chat_id].pop(0)
+
+            # Resolve filepath if prefetch hasn't finished
+            if not song.get("filepath"):
+                try:
+                    db = assistant_client.bot_ref.db
+                    local_cache = LocalCacheManager(db)
+                    cached_path = await local_cache.get(song["video_id"])
+
+                    if cached_path:
+                        song["filepath"] = cached_path
+                    else:
+                        engine = SearchEngine()
+                        result = await engine.download_song(song["video_id"])
+                        if not result or not result.get("success"):
+                            logger.warning(f"⚠️ Skipping undownloadable track: {song['title']}")
+                            continue  # try the next one in the queue
+                        path = result["data"]["filepath"]
+                        song["filepath"] = await local_cache.save(song["video_id"], path)
+                except Exception as e:
+                    logger.error(f"Lazy download failed for {song['title']}: {e}")
+                    continue  # try the next one
+
+            # We have a playable file — start it
+            try:
+                await assistant_client.call_py.play(
+                    chat_id,
+                    MediaStream(
+                        song["filepath"],
+                        audio_parameters=AudioQuality.STUDIO
+                    )
+                )
+                active_chats.add(chat_id)
+                paused_chats.discard(chat_id)
+
+                if assistant_client.bot_ref:
+                    started_by = last_action_user.get(chat_id, {}).get("play")
+                    await send_now_playing_card(assistant_client.bot_ref, chat_id, song, started_by)
+
+                start_monitor(chat_id, song["filepath"])
+                start_prefetch(chat_id)
+
+                logger.info(f"✅ VC AUTO-PLAYING NEXT: {song['title']} in {chat_id}")
+                return  # success — done
+
+            except Exception as e:
+                logger.error(f"play_next error while playing '{song['title']}': {e}")
+                continue  # try the next track instead of giving up
+
+        # Queue exhausted — leave the call
+        logger.info(f"📭 Queue empty for chat {chat_id}, leaving call")
         cancel_prefetch(chat_id)
         active_chats.discard(chat_id)
         paused_chats.discard(chat_id)
@@ -367,53 +428,6 @@ async def play_next(chat_id: int):
             await assistant_client.call_py.leave_call(chat_id)
         except Exception:
             pass
-        return
-
-    song = queues[chat_id].pop(0)
-
-    # Lazy download fallback (in case prefetch didn't finish in time)
-    if not song.get("filepath"):
-        try:
-            db = assistant_client.bot_ref.db
-            local_cache = LocalCacheManager(db)
-            cached_path = await local_cache.get(song["video_id"])
-
-            if cached_path:
-                song["filepath"] = cached_path
-            else:
-                engine = SearchEngine()
-                result = await engine.download_song(song["video_id"])
-                if not result or not result.get("success"):
-                    logger.warning(f"⚠️ Skipping undownloadable track: {song['title']}")
-                    await play_next(chat_id)
-                    return
-                path = result["data"]["filepath"]
-                song["filepath"] = await local_cache.save(song["video_id"], path)
-        except Exception as e:
-            logger.error(f"Lazy download failed for {song['title']}: {e}")
-            await play_next(chat_id)
-            return
-
-    try:
-        await assistant_client.call_py.play(
-            chat_id,
-            MediaStream(
-                song["filepath"],
-                audio_parameters=AudioQuality.STUDIO
-            )
-        )
-        active_chats.add(chat_id)
-        paused_chats.discard(chat_id)
-        if assistant_client.bot_ref:
-            started_by = last_action_user.get(chat_id, {}).get("play")
-            await send_now_playing_card(assistant_client.bot_ref, chat_id, song, started_by)
-
-        start_monitor(chat_id, song["filepath"])
-        start_prefetch(chat_id)
-
-        logger.info(f"✅ VC AUTO-PLAYING NEXT: {song['title']} in {chat_id}")
-    except Exception as e:
-        logger.error(f"play_next error: {e}")
 
 
 def user_mention(message_or_callback):
