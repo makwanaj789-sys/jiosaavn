@@ -34,6 +34,7 @@ now_playing_msg = {}
 last_action_user = {}
 now_playing_song = {}
 monitor_tasks = {}
+prefetch_tasks = {}
 
 
 def set_assistant(app: Assistant):
@@ -62,7 +63,6 @@ async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
             member = await client.get_chat_member(chat_id, assistant_id)
             logger.info(f"🔗 Assistant status in chat: {member.status}")
 
-            # 🔥 Handle banned/left status — needs unbanning first
             if str(member.status) in ("ChatMemberStatus.BANNED", "ChatMemberStatus.LEFT"):
                 logger.info(f"🔗 Assistant is {member.status}, attempting to unban...")
                 try:
@@ -74,7 +74,7 @@ async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
                     return False
                 needs_invite = True
             else:
-                return True  # Already a proper member
+                return True
 
         except Exception as e:
             logger.info(f"🔗 Assistant not in chat ({e}), will invite...")
@@ -83,7 +83,7 @@ async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
         if needs_invite:
             try:
                 invite_link = await client.export_chat_invite_link(chat_id)
-                logger.info(f"🔗 Generated invite link")
+                logger.info("🔗 Generated invite link")
             except Exception as e:
                 logger.error(f"❌ Couldn't generate invite link: {e}")
                 return False
@@ -105,10 +105,6 @@ async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
 
 
 def get_audio_duration(filepath: str) -> int:
-    """
-    Returns the real duration of the audio file in seconds using ffprobe.
-    Far more reliable than YouTube search metadata.
-    """
     try:
         result = subprocess.run(
             [
@@ -134,10 +130,63 @@ def cancel_monitor(chat_id: int):
         task.cancel()
 
 
+def cancel_prefetch(chat_id: int):
+    task = prefetch_tasks.pop(chat_id, None)
+    if task and not task.done():
+        task.cancel()
+
+
+async def prefetch_next_song(chat_id: int):
+    """
+    Downloads the next queued song in the background so playback
+    continues instantly when the current track ends.
+    """
+    try:
+        if not queues[chat_id]:
+            return
+
+        next_song = queues[chat_id][0]
+
+        if next_song.get("filepath"):
+            return
+
+        video_id = next_song["video_id"]
+        logger.info(f"⏬ PREFETCH: starting background download for '{next_song['title']}'")
+
+        db = assistant_client.bot_ref.db
+        local_cache = LocalCacheManager(db)
+
+        cached_path = await local_cache.get(video_id)
+        if cached_path:
+            next_song["filepath"] = cached_path
+            logger.info(f"⏬ PREFETCH: cache hit for '{next_song['title']}'")
+            return
+
+        engine = SearchEngine()
+        result = await engine.download_song(video_id)
+
+        if result and result.get("success"):
+            path = result["data"]["filepath"]
+            next_song["filepath"] = await local_cache.save(video_id, path)
+            logger.info(f"✅ PREFETCH: ready — '{next_song['title']}'")
+        else:
+            logger.warning(f"⚠️ PREFETCH failed for '{next_song['title']}'")
+
+    except asyncio.CancelledError:
+        return
+    except Exception as e:
+        logger.error(f"PREFETCH error for chat {chat_id}: {e}")
+    finally:
+        prefetch_tasks.pop(chat_id, None)
+
+
+def start_prefetch(chat_id: int):
+    cancel_prefetch(chat_id)
+    task = asyncio.create_task(prefetch_next_song(chat_id))
+    prefetch_tasks[chat_id] = task
+
+
 async def monitor_playback(chat_id: int, filepath: str):
-    """
-    Waits for the exact duration of the audio file, then plays the next track.
-    """
     duration = get_audio_duration(filepath)
 
     if duration <= 0:
@@ -295,6 +344,7 @@ async def play_next(chat_id: int):
     cancel_monitor(chat_id)
 
     if not queues[chat_id]:
+        cancel_prefetch(chat_id)
         active_chats.discard(chat_id)
         paused_chats.discard(chat_id)
         now_playing_song.pop(chat_id, None)
@@ -305,6 +355,29 @@ async def play_next(chat_id: int):
         return
 
     song = queues[chat_id].pop(0)
+
+    # Lazy download fallback (in case prefetch didn't finish in time)
+    if not song.get("filepath"):
+        try:
+            db = assistant_client.bot_ref.db
+            local_cache = LocalCacheManager(db)
+            cached_path = await local_cache.get(song["video_id"])
+
+            if cached_path:
+                song["filepath"] = cached_path
+            else:
+                engine = SearchEngine()
+                result = await engine.download_song(song["video_id"])
+                if not result or not result.get("success"):
+                    logger.warning(f"⚠️ Skipping undownloadable track: {song['title']}")
+                    await play_next(chat_id)
+                    return
+                path = result["data"]["filepath"]
+                song["filepath"] = await local_cache.save(song["video_id"], path)
+        except Exception as e:
+            logger.error(f"Lazy download failed for {song['title']}: {e}")
+            await play_next(chat_id)
+            return
 
     try:
         await assistant_client.call_py.play(
@@ -321,6 +394,7 @@ async def play_next(chat_id: int):
             await send_now_playing_card(assistant_client.bot_ref, chat_id, song, started_by)
 
         start_monitor(chat_id, song["filepath"])
+        start_prefetch(chat_id)
 
         logger.info(f"✅ VC AUTO-PLAYING NEXT: {song['title']} in {chat_id}")
     except Exception as e:
@@ -371,6 +445,7 @@ async def voice_play(client: Bot, message: Message):
                 f"📍 **Position:** #{len(queues[chat_id])}\n"
                 f"👤 **Added by:** {requester}"
             )
+            start_prefetch(chat_id)
             return
 
         active_chats.discard(chat_id)
@@ -400,6 +475,7 @@ async def voice_play(client: Bot, message: Message):
         await send_now_playing_card(client, chat_id, song, requester)
 
         start_monitor(chat_id, song["filepath"])
+        start_prefetch(chat_id)
 
         logger.info(f"✅ VC PLAYING: {song['title']} in chat {chat_id}")
 
@@ -408,7 +484,7 @@ async def voice_play(client: Bot, message: Message):
         await status_msg.edit_text(f"❌ **Error:** `{e}`")
 
 
-@Bot.on_message(filters.command("shuffle") & filters.group)
+@Bot.on_message(filters.command(["favshuffle", "shuffle"]) & filters.group)
 async def voice_shuffle(client: Bot, message: Message):
     if not assistant_client or not assistant_client.call_py:
         await message.reply("🚫 **Voice chat engine isn't ready yet.**")
@@ -421,49 +497,69 @@ async def voice_shuffle(client: Bot, message: Message):
     fav_songs = await favorites.list_favorites(message.from_user.id, limit=50)
 
     if not fav_songs:
-        await message.reply("💔 **Your favorites list is empty.**\n\nAdd some songs first using the ❤️ button!")
+        await message.reply(
+            "🎭 **Your vault is empty!**\n\n"
+            "You haven't saved any tracks yet. Hit the ❤️ button on any "
+            "playing song to build your personal collection, then come back "
+            "and let the shuffle do its magic. ✨"
+        )
         return
 
-    status_msg = await message.reply("🔀 **Shuffling your favorites...**")
+    status_msg = await message.reply(
+        f"🔀 **Shuffling {len(fav_songs)} tracks from your vault...**\n\n"
+        f"⏳ Preparing the first track..."
+    )
 
     try:
-        picked = random.choice(fav_songs)
-        video_id = picked["video_id"]
-        title = picked["title"]
+        shuffled = fav_songs.copy()
+        random.shuffle(shuffled)
 
         local_cache = LocalCacheManager(client.db)
-        cached_path = await local_cache.get(video_id)
+        engine = SearchEngine()
 
+        first = shuffled.pop(0)
+        first_video_id = first["video_id"]
+
+        cached_path = await local_cache.get(first_video_id)
         if cached_path:
-            filepath = cached_path
+            first_path = cached_path
         else:
-            engine = SearchEngine()
-            result = await engine.download_song(video_id)
+            result = await engine.download_song(first_video_id)
             if not result or not result.get("success"):
-                await status_msg.edit_text("❌ **Couldn't download that track.**")
+                await status_msg.edit_text("❌ **Couldn't download the first track.**")
                 return
-            filepath = result["data"]["filepath"]
-            filepath = await local_cache.save(video_id, filepath)
+            first_path = result["data"]["filepath"]
+            first_path = await local_cache.save(first_video_id, first_path)
 
-        song = {
-            "video_id": video_id,
-            "title": title,
+        first_song = {
+            "video_id": first_video_id,
+            "title": first["title"],
             "duration": 0,
-            "uploader": picked.get("uploader", "Unknown"),
-            "filepath": filepath,
-            "thumbnail": f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
+            "uploader": first.get("uploader", "Unknown"),
+            "filepath": first_path,
+            "thumbnail": f"https://i.ytimg.com/vi/{first_video_id}/maxresdefault.jpg"
         }
+
+        for fav in shuffled:
+            queues[chat_id].append({
+                "video_id": fav["video_id"],
+                "title": fav["title"],
+                "duration": 0,
+                "uploader": fav.get("uploader", "Unknown"),
+                "filepath": None,
+                "thumbnail": f"https://i.ytimg.com/vi/{fav['video_id']}/maxresdefault.jpg"
+            })
 
         active_calls = await assistant_client.call_py.calls
         is_actually_active = chat_id in active_calls
 
         if is_actually_active:
-            queues[chat_id].append(song)
+            queues[chat_id].insert(0, first_song)
             await status_msg.edit_text(
-                f"🔀 **Shuffled in!**\n\n"
-                f"🎵 {song['title']}\n"
-                f"📍 Position: #{len(queues[chat_id])}"
+                f"🔀 **Added {len(fav_songs)} shuffled tracks to the queue!**\n\n"
+                f"📋 Queue size: {len(queues[chat_id])}"
             )
+            start_prefetch(chat_id)
             return
 
         active_chats.discard(chat_id)
@@ -479,7 +575,7 @@ async def voice_shuffle(client: Bot, message: Message):
 
         await assistant_client.call_py.play(
             chat_id,
-            MediaStream(song["filepath"], audio_parameters=AudioQuality.STUDIO)
+            MediaStream(first_song["filepath"], audio_parameters=AudioQuality.STUDIO)
         )
 
         active_chats.add(chat_id)
@@ -487,11 +583,12 @@ async def voice_shuffle(client: Bot, message: Message):
         last_action_user.setdefault(chat_id, {})["play"] = started_by
         await status_msg.delete()
 
-        await send_now_playing_card(client, chat_id, song, started_by)
+        await send_now_playing_card(client, chat_id, first_song, started_by)
 
-        start_monitor(chat_id, song["filepath"])
+        start_monitor(chat_id, first_song["filepath"])
+        start_prefetch(chat_id)
 
-        logger.info(f"✅ SHUFFLE PLAYING: {song['title']} in chat {chat_id}")
+        logger.info(f"✅ SHUFFLE PLAYING: {first_song['title']} + {len(shuffled)} queued in chat {chat_id}")
 
     except Exception as e:
         logger.error(f"voice_shuffle error: {e}")
@@ -532,6 +629,7 @@ async def cb_skip(client: Bot, callback: CallbackQuery):
     if not queues[chat_id]:
         await callback.message.reply(f"📭 **Queue is empty.** Skipped by {skipper}")
         cancel_monitor(chat_id)
+        cancel_prefetch(chat_id)
         try:
             await assistant_client.call_py.leave_call(chat_id)
             active_chats.discard(chat_id)
@@ -560,6 +658,7 @@ async def cb_stop(client: Bot, callback: CallbackQuery):
     paused_chats.discard(chat_id)
     now_playing_song.pop(chat_id, None)
     cancel_monitor(chat_id)
+    cancel_prefetch(chat_id)
 
     try:
         await assistant_client.call_py.leave_call(chat_id)
@@ -585,8 +684,11 @@ async def cb_queue(client: Bot, callback: CallbackQuery):
         return
 
     text = "\n".join(
-        f"{i}. {song['title']}" for i, song in enumerate(queues[chat_id], start=1)
+        f"{i}. {song['title'][:35]}" for i, song in enumerate(queues[chat_id][:10], start=1)
     )
+    if len(queues[chat_id]) > 10:
+        text += f"\n\n...and {len(queues[chat_id]) - 10} more"
+
     await callback.answer(text[:200], show_alert=True)
 
 
@@ -638,6 +740,7 @@ async def voice_skip(client: Bot, message: Message):
     if not queues[chat_id]:
         await message.reply("📭 **Queue is empty, nothing to skip to.**")
         cancel_monitor(chat_id)
+        cancel_prefetch(chat_id)
         try:
             await assistant_client.call_py.leave_call(chat_id)
             active_chats.discard(chat_id)
@@ -659,6 +762,7 @@ async def voice_stop(client: Bot, message: Message):
     paused_chats.discard(chat_id)
     now_playing_song.pop(chat_id, None)
     cancel_monitor(chat_id)
+    cancel_prefetch(chat_id)
 
     try:
         await assistant_client.call_py.leave_call(chat_id)
@@ -677,7 +781,10 @@ async def voice_queue(client: Bot, message: Message):
         return
 
     text = "📋 **Current Queue**\n\n"
-    for i, song in enumerate(queues[chat_id], start=1):
-        text += f"**{i}.** 🎵 {song['title']}\n"
+    for i, song in enumerate(queues[chat_id][:20], start=1):
+        text += f"**{i}.** 🎵 {song['title'][:50]}\n"
+
+    if len(queues[chat_id]) > 20:
+        text += f"\n_...and {len(queues[chat_id]) - 20} more tracks_"
 
     await message.reply(text)
