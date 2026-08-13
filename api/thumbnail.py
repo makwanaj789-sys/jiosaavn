@@ -34,49 +34,33 @@ def generate_now_playing_card(thumbnail_url: str, title: str, artist: str) -> st
         mask_draw.rounded_rectangle([0, 0, art_size, art_size], radius=24, fill=255)
 
         pos_x = (canvas_size[0] - art_size) // 2
-        pos_y = 90
+        pos_y = 130
         background.paste(square, (pos_x, pos_y), mask)
 
         draw = ImageDraw.Draw(background)
 
-        # Fonts
         try:
-            font_brand = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+            font_brand = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
             font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34)
             font_artist = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
-            font_tag = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
         except Exception:
-            font_brand = font_title = font_artist = font_tag = ImageFont.load_default()
+            font_brand = font_title = font_artist = ImageFont.load_default()
 
-        # 🔥 Top branding bar
-        draw.rectangle([0, 0, canvas_size[0], 60], fill=(0, 0, 0))
-        draw.text(
-            (canvas_size[0] // 2, 30),
-            "♫  A A R T I   M U S I C  ♫",
-            font=font_brand,
-            fill=(255, 255, 255),
-            anchor="mm"
-        )
+        # 🔥 Brand split: "AARTI" on the left of the art, "MUSIC" on the right
+        art_center_y = pos_y + (art_size // 2)
+        left_x = pos_x // 2
+        right_x = pos_x + art_size + ((canvas_size[0] - pos_x - art_size) // 2)
 
-        # Accent line under the branding bar
-        draw.rectangle([0, 60, canvas_size[0], 64], fill=(29, 185, 84))  # Spotify-ish green
+        draw.text((left_x, art_center_y), "AARTI", font=font_brand, fill="white", anchor="mm")
+        draw.text((right_x, art_center_y), "MUSIC", font=font_brand, fill="white", anchor="mm")
 
-        # Track title + artist
+        # Track title + artist below the art
         title_short = (title[:42] + "…") if len(title) > 42 else title
         artist_short = (artist[:48] + "…") if len(artist) > 48 else artist
 
         text_y = pos_y + art_size + 45
         draw.text((canvas_size[0] // 2, text_y), title_short, font=font_title, fill="white", anchor="mm")
         draw.text((canvas_size[0] // 2, text_y + 42), artist_short, font=font_artist, fill=(200, 200, 200), anchor="mm")
-
-        # 🔥 Bottom watermark
-        draw.text(
-            (canvas_size[0] // 2, canvas_size[1] - 30),
-            "@AartiMusic_bot  •  your music, anywhere",
-            font=font_tag,
-            fill=(150, 150, 150),
-            anchor="mm"
-        )
 
         out_path = os.path.join(tempfile.gettempdir(), f"nowplaying_{os.getpid()}_{abs(hash(title))}.jpg")
         background.save(out_path, "JPEG", quality=92)
