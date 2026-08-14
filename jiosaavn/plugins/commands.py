@@ -221,3 +221,22 @@ async def about(client: Bot, message: Message | CallbackQuery):
 
     except Exception as e:
         logger.exception(f"Error inside about handler: {e}")
+
+# ==================== CLOSE ====================
+
+@Bot.on_callback_query(filters.regex(r"^close$"))
+async def close_cb(client: Bot, callback: CallbackQuery):
+    try:
+        await callback.answer()
+
+        reply_to = callback.message.reply_to_message
+        await callback.message.delete()
+
+        if reply_to:
+            try:
+                await reply_to.delete()
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.exception(f"Error inside close callback: {e}")
