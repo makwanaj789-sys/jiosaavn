@@ -1,3 +1,5 @@
+import os
+import random
 import logging
 
 from jiosaavn.bot import Bot
@@ -13,19 +15,41 @@ from pyrogram.types import (
 
 logger = logging.getLogger(__name__)
 
+# Folder where start images live (repo_root/assets/start_images)
+START_IMAGES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "assets",
+    "start_images"
+)
 
-async def get_bot_photo(client: Bot):
+VALID_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def get_random_start_image():
     """
-    Fetches the bot's own profile photo file_id so we can send it
-    with the start message.
+    Picks a random image from assets/start_images.
+    Returns the filepath, or None if the folder is missing/empty.
     """
     try:
-        me = await client.get_me()
-        if me.photo:
-            return me.photo.big_file_id
+        if not os.path.isdir(START_IMAGES_DIR):
+            logger.warning(f"Start images folder not found: {START_IMAGES_DIR}")
+            return None
+
+        images = [
+            os.path.join(START_IMAGES_DIR, f)
+            for f in os.listdir(START_IMAGES_DIR)
+            if f.lower().endswith(VALID_EXTENSIONS)
+        ]
+
+        if not images:
+            logger.warning("No images found in start_images folder")
+            return None
+
+        return random.choice(images)
+
     except Exception as e:
-        logger.warning(f"Couldn't fetch bot photo: {e}")
-    return None
+        logger.warning(f"get_random_start_image error: {e}")
+        return None
 
 
 # ==================== START / HOME ====================
@@ -73,7 +97,6 @@ async def start(client: Bot, message: Message | CallbackQuery):
         ])
 
         caption = TEXT.START_MSG.format(mention=mention)
-        photo_id = await get_bot_photo(client)
 
         # Coming back from another menu — edit the existing message
         if is_callback:
@@ -93,10 +116,12 @@ async def start(client: Bot, message: Message | CallbackQuery):
                 pass
             return
 
-        # Fresh /start — send the bot's photo with details below
-        if photo_id:
+        # Fresh /start — send a random image with details below
+        image_path = get_random_start_image()
+
+        if image_path:
             await message.reply_photo(
-                photo=photo_id,
+                photo=image_path,
                 caption=caption,
                 reply_markup=buttons,
                 quote=True
@@ -118,6 +143,9 @@ async def start(client: Bot, message: Message | CallbackQuery):
                 await message.reply("❌ An error occurred while processing your request.")
         except Exception:
             logger.exception("Could not send start error message")
+
+
+# ==================== HELP ====================
 
 @Bot.on_callback_query(filters.regex(r"^help$"))
 @Bot.on_message(filters.command("help") & filters.private)
@@ -171,6 +199,8 @@ async def help_handler(client: Bot, message: Message | CallbackQuery):
         logger.exception(f"Error inside help_handler: {e}")
 
 
+# ==================== ABOUT ====================
+
 @Bot.on_callback_query(filters.regex(r"^about$"))
 @Bot.on_message(filters.command("about") & filters.private)
 async def about(client: Bot, message: Message | CallbackQuery):
@@ -222,10 +252,12 @@ async def about(client: Bot, message: Message | CallbackQuery):
     except Exception as e:
         logger.exception(f"Error inside about handler: {e}")
 
+
 # ==================== CLOSE ====================
 
 @Bot.on_callback_query(filters.regex(r"^close$"))
 async def close_cb(client: Bot, callback: CallbackQuery):
+
     try:
         await callback.answer()
 
