@@ -5,20 +5,22 @@ class TEXT:
     # ==================== START ====================
 
     START_MSG = """
-**Hello {mention},** ❤️
+**Hey {mention}** 👋
 
-<blockquote>🎵 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ ᴀᴀʀᴛɪ ᴍᴜsɪᴄ!
+<blockquote>◈ 𝗔 𝗔 𝗥 𝗧 𝗜   𝗠 𝗨 𝗦 𝗜 𝗖 ◈
 
-ʏᴏᴜʀ ᴘᴇʀsᴏɴᴀʟ ᴍᴜsɪᴄ ᴄᴏᴍᴘᴀɴɪᴏɴ 🎧
-sᴇᴀʀᴄʜ ᴀɴᴅ ᴅᴏᴡɴʟᴏᴀᴅ ʏᴏᴜʀ ғᴀᴠᴏʀɪᴛᴇ
-sᴏɴɢs, ᴀʟʙᴜᴍs, ᴘʟᴀʏʟɪsᴛs ᴀɴᴅ ᴀʀᴛɪsᴛs.</blockquote>
+Your music, anywhere on Telegram.
+Search, stream, save — all in one place.</blockquote>
 
-**✨ Features :**
+**⚡ What I can do**
 
-• 🎧 𝘚𝘦𝘢𝘳𝘤𝘩 𝘺𝘰𝘶𝘳 𝘧𝘢𝘷𝘰𝘳𝘪𝘵𝘦 𝘴𝘰𝘯𝘨𝘴
-• 📥 𝘋𝘰𝘸𝘯𝘭𝘰𝘢𝘥 𝘮𝘶𝘴𝘪𝘤 𝘥𝘪𝘳𝘦𝘤𝘵𝘭𝘺
-• 💿 𝘌𝘹𝘱𝘭𝘰𝘳𝘦 𝘢𝘭𝘣𝘶𝘮𝘴 & 𝘱𝘭𝘢𝘺𝘭𝘪𝘴𝘵𝘴
-• 🎤 𝘋𝘪𝘴𝘤𝘰𝘷𝘦𝘳 𝘺𝘰𝘶𝘳 𝘧𝘢𝘷𝘰𝘳𝘪𝘵𝘦 𝘢𝘳𝘵𝘪𝘴𝘵𝘴
+>🔍 Search & download any song instantly
+>💬 Work inline in **any** chat or group
+>❤️ Save tracks to your personal vault
+>🎙 Stream music live in voice chats
+>🔀 Shuffle-play your favorites
+
+__Tap **Help** below to see every command__
 
 **👑 Owner:** [UMCLON](https://t.me/umclon)
 **📢 Updates:** [UMCLON ERA](https://t.me/umclon_era)
@@ -28,19 +30,32 @@ sᴏɴɢs, ᴀʟʙᴜᴍs, ᴘʟᴀʏʟɪsᴛs ᴀɴᴅ ᴀʀᴛɪsᴛs.</blockq
     # ==================== HELP ====================
 
     HELP_MSG = """
-**🎧 How to use Aarti Music?**
+**◈ COMMAND GUIDE ◈**
 
-<blockquote>
-1. Configure your preferences using `/settings`.
+**🎵 Music Download**
+>`/am <song name>` — search & download in groups
+>Send a song name in DM — no command needed
+>`@AartiMusic_bot <song>` — inline, works everywhere
 
-2. Send me the name of any song, album, playlist or artist.
+**❤️ Favorites**
+>`/myfavorites` — view your saved tracks
+>Tap ❤️ on any track to save or remove it
 
-3. Select your desired result.
+**🎙 Voice Chat** _(groups only)_
+>`/vplay <song name>` — play in voice chat
+>`/favshuffle` — shuffle-play your favorites
+>`/vqueue` — see what's lined up
+>`/vskip` — skip to next track _(admins)_
+>`/vstop` — stop & leave the call _(admins)_
 
-4. Aarti Music will handle the rest for you. 🎶
+**ℹ️ General**
+>`/start` — restart the bot
+>`/help` — this guide
+>`/about` — bot info
+>`/settings` — your preferences
 
-❤️ Enjoy your music!
-</blockquote>
+<blockquote>💡 Playback controls appear as buttons under
+every Now Playing card — no typing needed.</blockquote>
 
 **📢 Updates:** [UMCLON ERA](https://t.me/umclon_era)
 """
@@ -49,19 +64,15 @@ sᴏɴɢs, ᴀʟʙᴜᴍs, ᴘʟᴀʏʟɪsᴛs ᴀɴᴅ ᴀʀᴛɪsᴛs.</blockq
     # ==================== ABOUT ====================
 
     ABOUT_MSG = """
-<blockquote>
-**🤖 Bot Name:** [Aarti Music](https://t.me/{me.username})
+**◈ ABOUT ◈**
 
-**📝 Language:** Python 3
-**🧰 Framework:** Pyrogram
+<blockquote>**🤖 Bot:** [Aarti Music](https://t.me/{me.username})
+**⚙️ Built with:** Python 3 · Pyrogram · PyTgCalls
+**🎧 Purpose:** Music search, download & live streaming
 
 **👑 Owner:** [UMCLON](https://t.me/umclon)
 **👨‍💻 Developer:** [UMCLON](https://t.me/umclon)
+**📢 Updates:** [UMCLON ERA](https://t.me/umclon_era)</blockquote>
 
-**📢 Updates Channel:** [UMCLON ERA](https://t.me/umclon_era)
-
-**🎵 Purpose:** Music Search & Download
-</blockquote>
-
-❤️ **Powered By UMCLON**
+__♫ powered by AartiMusic ♫__
 """
