@@ -1,78 +1,81 @@
 ##### AARTI MUSIC BOT TEXT #####
 
+from jiosaavn.emojis import *
+
+
 class TEXT:
 
     # ==================== START ====================
 
-    START_MSG = """
-**Hey {mention}** 👋
+    START_MSG = f"""
+**Hey {{mention}}** {E_SPARKLE}
 
 <blockquote>◈ 𝗔 𝗔 𝗥 𝗧 𝗜   𝗠 𝗨 𝗦 𝗜 𝗖 ◈
 
 Your music, anywhere on Telegram.
 Search, stream, save — all in one place.</blockquote>
 
-**⚡ What I can do**
+**{E_SPARKLE} ᴡʜᴀᴛ ɪ ᴄᴀɴ ᴅᴏ**
 
->🔍 Search & download any song instantly
->💬 Work inline in **any** chat or group
->❤️ Save tracks to your personal vault
->🎙 Stream music live in voice chats
->🔀 Shuffle-play your favorites
+>{E_SEARCH} Search & download any song instantly
+>{E_LINK} Work inline in **any** chat or group
+>{E_HEART} Save tracks to your personal vault
+>{E_PHONE} Stream music live in voice chats
+>{E_SHUFFLE} Shuffle-play your favorites
 
-__Tap **Help** below to see every command__
+__Tap **ʜᴇʟᴘ** below to see every command__
 
-**👑 Owner:** [UMCLON](https://t.me/umclon)
-**📢 Updates:** [UMCLON ERA](https://t.me/umclon_era)
+**{E_USER} ᴏᴡɴᴇʀ:** [UMCLON](https://t.me/umclon)
+**{E_MEGA} ᴜᴘᴅᴀᴛᴇꜱ:** [UMCLON ERA](https://t.me/umclon_era)
 """
 
 
     # ==================== HELP ====================
 
-    HELP_MSG = """
-**◈ COMMAND GUIDE ◈**
+    HELP_MSG = f"""
+**◈ ᴄᴏᴍᴍᴀɴᴅ ɢᴜɪᴅᴇ ◈**
 
-**🎵 Music Download**
->`/am <song name>` — search & download in groups
+**{E_DOWNLOAD} ᴍᴜꜱɪᴄ ᴅᴏᴡɴʟᴏᴀᴅ**
+>`/am <song>` — search & download in groups
 >Send a song name in DM — no command needed
->`@AartiMusic_bot <song>` — inline, works everywhere
+>`@AartiMusic_bot <song>` — inline, everywhere
 
-**❤️ Favorites**
+**{E_HEART} ꜰᴀᴠᴏʀɪᴛᴇꜱ**
 >`/myfavorites` — view your saved tracks
->Tap ❤️ on any track to save or remove it
+>Tap ꜰᴀᴠᴏʀɪᴛᴇ on any track to save or remove
 
-**🎙 Voice Chat** _(groups only)_
->`/vplay <song name>` — play in voice chat
+**{E_PHONE} ᴠᴏɪᴄᴇ ᴄʜᴀᴛ** _(groups only)_
+>`/vplay <song>` — play in voice chat
 >`/favshuffle` — shuffle-play your favorites
 >`/vqueue` — see what's lined up
->`/vskip` — skip to next track _(admins)_
->`/vstop` — stop & leave the call _(admins)_
+>`/vskip` — skip to next track
+>`/vstop` — stop & leave the call
+>`/set` — play permission mode _(admins)_
 
-**ℹ️ General**
+**{E_WRITE} ɢᴇɴᴇʀᴀʟ**
 >`/start` — restart the bot
 >`/help` — this guide
 >`/about` — bot info
->`/settings` — your preferences
 
-<blockquote>💡 Playback controls appear as buttons under
+<blockquote>{E_SHIELD} Playback controls appear as buttons under
 every Now Playing card — no typing needed.</blockquote>
 
-**📢 Updates:** [UMCLON ERA](https://t.me/umclon_era)
+**{E_MEGA} ᴜᴘᴅᴀᴛᴇꜱ:** [UMCLON ERA](https://t.me/umclon_era)
 """
 
 
     # ==================== ABOUT ====================
 
-    ABOUT_MSG = """
-**◈ ABOUT ◈**
+    ABOUT_MSG = f"""
+**◈ ᴀʙᴏᴜᴛ ◈**
 
-<blockquote>**🤖 Bot:** [Aarti Music](https://t.me/{me.username})
-**⚙️ Built with:** Python 3 · Pyrogram · PyTgCalls
-**🎧 Purpose:** Music search, download & live streaming
+<blockquote>**{E_MUSIC} ʙᴏᴛ:** [Aarti Music](https://t.me/{{me.username}})
+**{E_SETTINGS} ʙᴜɪʟᴛ ᴡɪᴛʜ:** Python 3 · Pyrogram · PyTgCalls
+**{E_CASSETTE} ᴘᴜʀᴘᴏꜱᴇ:** Music search, download & streaming
 
-**👑 Owner:** [UMCLON](https://t.me/umclon)
-**👨‍💻 Developer:** [UMCLON](https://t.me/umclon)
-**📢 Updates:** [UMCLON ERA](https://t.me/umclon_era)</blockquote>
+**{E_USER} ᴏᴡɴᴇʀ:** [UMCLON](https://t.me/umclon)
+**{E_DEV} ᴅᴇᴠᴇʟᴏᴘᴇʀ:** [UMCLON](https://t.me/umclon)
+**{E_MEGA} ᴜᴘᴅᴀᴛᴇꜱ:** [UMCLON ERA](https://t.me/umclon_era)</blockquote>
 
-__♫ powered by AartiMusic ♫__
+__{E_SPARKLE} ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴀᴀʀᴛɪᴍᴜꜱɪᴄ__
 """
