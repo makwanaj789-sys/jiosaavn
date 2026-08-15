@@ -1,11 +1,11 @@
 import logging
-import traceback
 import asyncio
 
 from api.search_engine import SearchEngine
 from jiosaavn.bot import Bot
+from jiosaavn.emojis import *
 
-from pyrogram import filters
+from pyrogram import filters, enums
 from pyrogram.enums import ChatType
 from pyrogram.types import (
     Message,
@@ -19,12 +19,13 @@ logger = logging.getLogger(__name__)
 private_search_filter = (filters.text & filters.incoming & filters.private)
 group_search_filter = (filters.command("am") & filters.incoming)
 
+
 @Bot.on_message(private_search_filter | group_search_filter)
 async def search(client: Bot, message: Message):
     if message.via_bot:
-       return
+        return
 
-    # 🔥 STATS: user aur group track karo
+    # STATS: track user and group
     if message.from_user:
         try:
             exists = await client.db.is_user_exist(message.from_user.id)
@@ -41,31 +42,44 @@ async def search(client: Bot, message: Message):
 
     send_msg = None
     try:
-        # Query extract karo
+        # Extract query
         if message.chat.type == ChatType.PRIVATE:
             query = message.text.strip()
         else:
             parts = message.text.split(maxsplit=1)
             if len(parts) < 2:
-                return await message.reply("❌ Please enter a song name.\nExample: `/am Alan Walker`")
+                return await message.reply(
+                    f"**◈ ᴍɪꜱꜱɪɴɢ ᴛʀᴀᴄᴋ ɴᴀᴍᴇ ◈**\n\n"
+                    f">{E_WRITE} Tell me what to look for.\n"
+                    f">Example: `/am Alan Walker Faded`"
+                )
             query = parts[1].strip()
             if not query:
-                return await message.reply("❌ Please enter a song name.")
+                return await message.reply(
+                    f"**◈ ᴍɪꜱꜱɪɴɢ ᴛʀᴀᴄᴋ ɴᴀᴍᴇ ◈**\n\n"
+                    f">{E_WRITE} Tell me what to look for."
+                )
 
-        send_msg = await message.reply("__**Searching YouTube... ⏳**__", quote=True)
+        # Magnifier only — no text
+        send_msg = await message.reply(E_SEARCH, quote=True)
 
-        # Search karo - Same method inline mein bhi use hogi
         engine = SearchEngine()
         response = await engine.search(query)
 
         if not response or not isinstance(response, dict):
-            return await send_msg.edit(f"🔎 No results found for `{query}`")
+            return await send_msg.edit(
+                f"**◈ ɴᴏ ʀᴇꜱᴜʟᴛꜱ ◈**\n\n"
+                f">{E_STOP} Nothing found for `{query}`"
+            )
 
         results = response.get("results", [])
         if not results:
-            return await send_msg.edit(f"🔎 No results found for `{query}`")
+            return await send_msg.edit(
+                f"**◈ ɴᴏ ʀᴇꜱᴜʟᴛꜱ ◈**\n\n"
+                f">{E_STOP} Nothing found for `{query}`"
+            )
 
-        # 🔥 STATS: search count badhao
+        # STATS: search count
         try:
             await client.db.add_search(
                 user_id=message.from_user.id,
@@ -74,7 +88,7 @@ async def search(client: Bot, message: Message):
         except Exception:
             logger.exception("Search tracking error")
 
-        # Buttons banao
+        # Build result buttons
         buttons = []
         for result in results:
             title = result.get("title", "Unknown")
@@ -84,20 +98,40 @@ async def search(client: Bot, message: Message):
             video_id = result.get("id")
 
             if video_id:
-                btn_text = f"🎙 {title} - {artist} ({dur_str})"
-                buttons.append([InlineKeyboardButton(btn_text, callback_data=f"youtube#{video_id}")])
+                btn_text = f"{title} — {artist} ({dur_str})"
+                buttons.append([
+                    InlineKeyboardButton(
+                        btn_text[:60],
+                        callback_data=f"youtube#{video_id}",
+                        style=enums.ButtonStyle.PRIMARY,
+                        icon_custom_emoji_id="5911274703367968100"
+                    )
+                ])
 
         if not buttons:
-            return await send_msg.edit(f"🔎 No results found for `{query}`")
+            return await send_msg.edit(
+                f"**◈ ɴᴏ ʀᴇꜱᴜʟᴛꜱ ◈**\n\n"
+                f">{E_STOP} Nothing found for `{query}`"
+            )
 
-        buttons.append([InlineKeyboardButton("Close ❌", callback_data="close")])
+        buttons.append([
+            InlineKeyboardButton(
+                "ᴄʟᴏꜱᴇ",
+                callback_data="close",
+                style=enums.ButtonStyle.DANGER,
+                icon_custom_emoji_id="5974083768233760323"
+            )
+        ])
 
         await send_msg.edit(
-            f"**🔍 Search Query:** `{query}`\n\n**📜 Results:**",
+            f"**◈ ꜱᴇᴀʀᴄʜ ʀᴇꜱᴜʟᴛꜱ ◈**\n\n"
+            f">{E_SEARCH} **{query}**\n"
+            f">{E_CASSETTE} Found `{len(buttons) - 1}` tracks\n\n"
+            f"__{E_SPARKLE} Tap any track to download__",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
     except Exception as e:
         logger.exception("Search Handler Error")
         if send_msg:
-            await send_msg.edit(f"❌ Error: {e}")
+            await send_msg.edit(f"**◈ ᴇʀʀᴏʀ ◈**\n\n>`{e}`")
