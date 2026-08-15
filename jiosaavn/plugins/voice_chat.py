@@ -5,6 +5,7 @@ import logging
 import subprocess
 from collections import defaultdict
 from pyrogram import filters
+from pyrogram import enums
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import (
     Message,
