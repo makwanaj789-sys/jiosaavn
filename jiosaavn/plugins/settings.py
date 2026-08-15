@@ -9,6 +9,7 @@ from pyrogram.types import (
 )
 
 from jiosaavn.bot import Bot
+from jiosaavn.emojis import *
 from api.settings import SettingsManager
 from api.settings_image import build_settings_card, SETTINGS_CARD_PATH
 
@@ -38,19 +39,24 @@ def settings_markup(play_mode: str):
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                f"{'✅ ' if admins_selected else ''}Admins Only",
+                f"{'✦ ' if admins_selected else ''}ᴀᴅᴍɪɴꜱ ᴏɴʟʏ",
                 callback_data="set_mode_admins",
                 style=enums.ButtonStyle.SUCCESS if admins_selected else enums.ButtonStyle.DEFAULT
             ),
             InlineKeyboardButton(
-                f"{'✅ ' if not admins_selected else ''}Everyone",
+                f"{'✦ ' if not admins_selected else ''}ᴇᴠᴇʀʏᴏɴᴇ",
                 callback_data="set_mode_everyone",
                 style=enums.ButtonStyle.SUCCESS if not admins_selected else enums.ButtonStyle.DEFAULT
             ),
         ],
         [
             InlineKeyboardButton(
-                "✖️ Close",
+                "ᴀᴅᴅ ᴍᴇ",
+                url="https://t.me/AartiMusic_bot?startgroup=true",
+                style=enums.ButtonStyle.PRIMARY
+            ),
+            InlineKeyboardButton(
+                "ᴄʟᴏꜱᴇ",
                 callback_data="close",
                 style=enums.ButtonStyle.DANGER
             )
@@ -60,19 +66,19 @@ def settings_markup(play_mode: str):
 
 def settings_caption(play_mode: str) -> str:
     if play_mode == "admins":
-        current = "🔒 **Admins Only**"
+        current = f"{E_SHIELD} **ᴀᴅᴍɪɴꜱ ᴏɴʟʏ**"
         explain = ">Only group admins can start, pause,\n>skip or stop playback."
     else:
-        current = "🌍 **Everyone**"
+        current = f"{E_SPEAK} **ᴇᴠᴇʀʏᴏɴᴇ**"
         explain = ">Any member of this group can control\n>playback freely."
 
     return (
-        "**◈ PLAY PERMISSION MODE ◈**\n\n"
-        f"**Current:** {current}\n\n"
+        f"**◈ ᴘʟᴀʏ ᴘᴇʀᴍɪꜱꜱɪᴏɴ ᴍᴏᴅᴇ ◈**\n\n"
+        f"**ᴄᴜʀʀᴇɴᴛ:** {current}\n\n"
         f"{explain}\n\n"
-        "<blockquote>🔒 **Admins Only** — safer for big or public groups.\n"
-        "🌍 **Everyone** — best for friends and small chats.</blockquote>\n\n"
-        "__Tap a button below to switch modes__"
+        f"<blockquote>{E_SHIELD} **ᴀᴅᴍɪɴꜱ ᴏɴʟʏ** — safer for big or public groups.\n"
+        f"{E_SPEAK} **ᴇᴠᴇʀʏᴏɴᴇ** — best for friends and small chats.</blockquote>\n\n"
+        f"__{E_SETTINGS} Tap a button below to switch modes__"
     )
 
 
@@ -82,7 +88,7 @@ async def settings_panel(client: Bot, message: Message):
 
     member = await client.get_chat_member(chat_id, message.from_user.id)
     if member.status not in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER):
-        await message.reply("🔒 **Only admins can open settings.**")
+        await message.reply(f"{E_SHIELD} **ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴏᴘᴇɴ ꜱᴇᴛᴛɪɴɢꜱ**")
         return
 
     sm = SettingsManager(client.db)
@@ -104,7 +110,7 @@ async def change_mode(client: Bot, callback: CallbackQuery):
 
     member = await client.get_chat_member(chat_id, callback.from_user.id)
     if member.status not in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER):
-        await callback.answer("🔒 Only admins can change settings.", show_alert=True)
+        await callback.answer("🔒 ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄʜᴀɴɢᴇ ꜱᴇᴛᴛɪɴɢꜱ", show_alert=True)
         return
 
     mode = callback.data.replace("set_mode_", "")
@@ -112,7 +118,8 @@ async def change_mode(client: Bot, callback: CallbackQuery):
     await sm.set(chat_id, "play_mode", mode)
 
     await callback.answer(
-        "🔒 Admins Only enabled" if mode == "admins" else "🌍 Everyone can now control playback"
+        "🛡 ᴀᴅᴍɪɴꜱ ᴏɴʟʏ ᴇɴᴀʙʟᴇᴅ" if mode == "admins"
+        else "🗣 ᴇᴠᴇʀʏᴏɴᴇ ᴄᴀɴ ɴᴏᴡ ᴄᴏɴᴛʀᴏʟ ᴘʟᴀʏʙᴀᴄᴋ"
     )
 
     try:
