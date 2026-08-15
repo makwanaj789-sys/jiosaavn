@@ -19,6 +19,7 @@ from pytgcalls.types.stream import StreamEnded
 
 from jiosaavn.bot import Bot
 from jiosaavn.assistant import Assistant
+from jiosaavn.emojis import *
 from api.search_engine import SearchEngine
 from api.thumbnail import generate_now_playing_card
 from api.favorites import FavoritesManager
@@ -28,25 +29,6 @@ from api.settings import SettingsManager
 logger = logging.getLogger(__name__)
 
 assistant_client: Assistant = None
-
-# ============================================================
-# PREMIUM (CUSTOM) EMOJI
-# ============================================================
-
-E_MUSIC = '<tg-emoji emoji-id="5217933090483098080">🎵</tg-emoji>'
-E_PHONE = '<tg-emoji emoji-id="5247176827016847212">📞</tg-emoji>'
-E_LOADING = '<tg-emoji emoji-id="5253464392850221514">🔃</tg-emoji>'
-E_SEARCH = '<tg-emoji emoji-id="6318752565865482087">🔍</tg-emoji>'
-E_USER = '<tg-emoji emoji-id="5256143829672672750">👤</tg-emoji>'
-E_SHIELD = '<tg-emoji emoji-id="5197288647275071607">🛡</tg-emoji>'
-E_SPEAK = '<tg-emoji emoji-id="5391247205698912640">🗣</tg-emoji>'
-E_DIAMOND = '<tg-emoji emoji-id="6039330304349443035">💎</tg-emoji>'
-E_LINK = '<tg-emoji emoji-id="5859270552153231910">🔗</tg-emoji>'
-E_CHECK = '<tg-emoji emoji-id="5861735798956627072">✅</tg-emoji>'
-E_MEGA = '<tg-emoji emoji-id="5859264006623072192">📣</tg-emoji>'
-E_DOWNLOAD = '<tg-emoji emoji-id="5859241651318297347">📥</tg-emoji>'
-E_WRITE = '<tg-emoji emoji-id="6124975405385391463">✍️</tg-emoji>'
-E_DEV = '<tg-emoji emoji-id="6174508000489768736">🧑‍💻</tg-emoji>'
 
 queues = defaultdict(list)
 active_chats = set()
@@ -356,14 +338,14 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
 
     caption = (
         f"**◈ ɴᴏᴡ ꜱᴛʀᴇᴀᴍɪɴɢ ◈**\n\n"
-        f">{E_MUSIC} [{song['title']}]({youtube_url})\n"
+        f">{E_TRACK} [{song['title']}]({youtube_url})\n"
         f">{E_USER} {song.get('uploader', 'Unknown')}"
     )
 
     if started_by:
         caption += f"\n>{E_SPEAK} ʀᴇQᴜᴇꜱᴛᴇᴅ ʙʏ {started_by}"
 
-    caption += f"\n\n__{E_DIAMOND} ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴀᴀʀᴛɪᴍᴜꜱɪᴄ__"
+    caption += f"\n\n__{E_SPARKLE} ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴀᴀʀᴛɪᴍᴜꜱɪᴄ__"
 
     card_path = generate_now_playing_card(
         song["thumbnail"], song["title"], song.get("uploader", "Unknown")
@@ -492,7 +474,7 @@ async def voice_play(client: Bot, message: Message):
         await message.reply(
             f"**◈ ᴀᴅᴍɪɴꜱ ᴏɴʟʏ ◈**\n\n"
             f">{E_SHIELD} Only admins can start playback here.\n"
-            f">{E_WRITE} An admin can change this with `/set`"
+            f">{E_SETTINGS} An admin can change this with `/set`"
         )
         return
 
@@ -508,7 +490,6 @@ async def voice_play(client: Bot, message: Message):
     query = parts[1].strip()
     requester = user_mention(message)
 
-    # Searching — magnifier emoji only, no text
     status_msg = await message.reply(E_SEARCH)
 
     try:
@@ -516,7 +497,7 @@ async def voice_play(client: Bot, message: Message):
         if not song:
             await status_msg.edit_text(
                 f"**◈ ɴᴏᴛ ꜰᴏᴜɴᴅ ◈**\n\n"
-                f">Couldn't find or download that track."
+                f">{E_STOP} Couldn't find or download that track."
             )
             return
 
@@ -527,8 +508,8 @@ async def voice_play(client: Bot, message: Message):
             queues[chat_id].append(song)
             await status_msg.edit_text(
                 f"**◈ ᴀᴅᴅᴇᴅ ᴛᴏ Qᴜᴇᴜᴇ ◈**\n\n"
-                f">{E_MUSIC} **{song['title']}**\n"
-                f">{E_DOWNLOAD} Position `#{len(queues[chat_id])}`\n"
+                f">{E_TRACK} **{song['title']}**\n"
+                f">{E_NEXT} Position `#{len(queues[chat_id])}`\n"
                 f">{E_USER} Added by {requester}"
             )
             start_prefetch(chat_id)
@@ -536,10 +517,7 @@ async def voice_play(client: Bot, message: Message):
 
         active_chats.discard(chat_id)
 
-        # Magnifier message morphs into the connecting message
-        await status_msg.edit_text(
-            f"{E_PHONE} **ᴊᴏɪɴɪɴɢ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ…**"
-        )
+        await status_msg.edit_text(f"{E_PHONE} **ᴊᴏɪɴɪɴɢ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ…**")
 
         joined = await ensure_assistant_in_chat(client, chat_id)
         if not joined:
@@ -587,7 +565,7 @@ async def voice_shuffle(client: Bot, message: Message):
         await message.reply(
             f"**◈ ᴀᴅᴍɪɴꜱ ᴏɴʟʏ ◈**\n\n"
             f">{E_SHIELD} Only admins can start playback here.\n"
-            f">{E_WRITE} An admin can change this with `/set`"
+            f">{E_SETTINGS} An admin can change this with `/set`"
         )
         return
 
@@ -599,10 +577,10 @@ async def voice_shuffle(client: Bot, message: Message):
     if not fav_songs:
         await message.reply(
             f"**◈ ʏᴏᴜʀ ᴠᴀᴜʟᴛ ɪꜱ ᴇᴍᴘᴛʏ ◈**\n\n"
-            f">You haven't saved any tracks yet.\n"
+            f">{E_HEART} You haven't saved any tracks yet.\n"
             f">Tap the ꜰᴀᴠᴏʀɪᴛᴇ button on any playing\n"
             f">song to start building your collection.\n\n"
-            f"__{E_DIAMOND} Then come back and let the shuffle work its magic__"
+            f"__{E_SPARKLE} Then come back and let the shuffle work its magic__"
         )
         return
 
@@ -626,7 +604,7 @@ async def voice_shuffle(client: Bot, message: Message):
             if not result or not result.get("success"):
                 await status_msg.edit_text(
                     f"**◈ ᴅᴏᴡɴʟᴏᴀᴅ ꜰᴀɪʟᴇᴅ ◈**\n\n"
-                    f">Couldn't prepare the first track."
+                    f">{E_STOP} Couldn't prepare the first track."
                 )
                 return
             first_path = result["data"]["filepath"]
@@ -658,16 +636,14 @@ async def voice_shuffle(client: Bot, message: Message):
             queues[chat_id].insert(0, first_song)
             await status_msg.edit_text(
                 f"**◈ ꜱʜᴜꜰꜰʟᴇ Qᴜᴇᴜᴇᴅ ◈**\n\n"
-                f">{E_LOADING} Added `{len(fav_songs)}` shuffled tracks\n"
-                f">{E_MUSIC} Queue size `{len(queues[chat_id])}`"
+                f">{E_SHUFFLE} Added `{len(fav_songs)}` shuffled tracks\n"
+                f">{E_CASSETTE} Queue size `{len(queues[chat_id])}`"
             )
             start_prefetch(chat_id)
             return
 
         active_chats.discard(chat_id)
-        await status_msg.edit_text(
-            f"{E_PHONE} **ᴊᴏɪɴɪɴɢ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ…**"
-        )
+        await status_msg.edit_text(f"{E_PHONE} **ᴊᴏɪɴɪɴɢ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ…**")
 
         joined = await ensure_assistant_in_chat(client, chat_id)
         if not joined:
@@ -688,7 +664,7 @@ async def voice_shuffle(client: Bot, message: Message):
         )
 
         active_chats.add(chat_id)
-        started_by = f"{requester} {E_LOADING}"
+        started_by = f"{requester} {E_SHUFFLE}"
         last_action_user.setdefault(chat_id, {})["play"] = started_by
         await status_msg.delete()
 
@@ -753,8 +729,8 @@ async def cb_skip(client: Bot, callback: CallbackQuery):
     if not queues[chat_id]:
         await callback.message.reply(
             f"**◈ Qᴜᴇᴜᴇ ᴇᴍᴘᴛʏ ◈**\n\n"
-            f">Nothing left to skip to.\n"
-            f">{E_USER} Stopped by {skipper}"
+            f">{E_STOP} Nothing left to skip to.\n"
+            f">{E_SKIP} Stopped by {skipper}"
         )
         cancel_monitor(chat_id)
         cancel_prefetch(chat_id)
@@ -773,7 +749,7 @@ async def cb_skip(client: Bot, callback: CallbackQuery):
                 pass
         return
 
-    last_action_user.setdefault(chat_id, {})["play"] = f"{skipper} ⏭"
+    last_action_user.setdefault(chat_id, {})["play"] = f"{skipper} {E_SKIP}"
     await play_next(chat_id)
 
 
@@ -798,7 +774,7 @@ async def cb_stop(client: Bot, callback: CallbackQuery):
         await callback.answer("⏹️ ꜱᴛᴏᴘᴘᴇᴅ")
         try:
             await callback.message.edit_caption(
-                (callback.message.caption or "") + f"\n\n>{E_SHIELD} ꜱᴛᴏᴘᴘᴇᴅ ʙʏ {stopper}",
+                (callback.message.caption or "") + f"\n\n>{E_STOP} ꜱᴛᴏᴘᴘᴇᴅ ʙʏ {stopper}",
                 reply_markup=None
             )
         except Exception:
@@ -877,7 +853,7 @@ async def voice_skip(client: Bot, message: Message):
     if not queues[chat_id]:
         await message.reply(
             f"**◈ Qᴜᴇᴜᴇ ᴇᴍᴘᴛʏ ◈**\n\n"
-            f">Nothing left to skip to."
+            f">{E_STOP} Nothing left to skip to."
         )
         cancel_monitor(chat_id)
         cancel_prefetch(chat_id)
@@ -890,7 +866,7 @@ async def voice_skip(client: Bot, message: Message):
             pass
         return
 
-    await message.reply(f"{E_LOADING} **ꜱᴋɪᴘᴘɪɴɢ…**")
+    await message.reply(f"{E_SKIP} **ꜱᴋɪᴘᴘɪɴɢ…**")
     await play_next(chat_id)
 
 
@@ -928,13 +904,13 @@ async def voice_queue(client: Bot, message: Message):
     if not queues[chat_id]:
         await message.reply(
             f"**◈ Qᴜᴇᴜᴇ ᴇᴍᴘᴛʏ ◈**\n\n"
-            f">Nothing lined up right now."
+            f">{E_CASSETTE} Nothing lined up right now."
         )
         return
 
     text = "**◈ ᴄᴜʀʀᴇɴᴛ Qᴜᴇᴜᴇ ◈**\n\n"
     for i, song in enumerate(queues[chat_id][:20], start=1):
-        text += f">`{i}.` {E_MUSIC} {song['title'][:50]}\n"
+        text += f">`{i}.` {E_TRACK} {song['title'][:50]}\n"
 
     if len(queues[chat_id]) > 20:
         text += f"\n__…and {len(queues[chat_id]) - 20} more tracks__"
