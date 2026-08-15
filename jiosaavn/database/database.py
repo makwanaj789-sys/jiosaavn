@@ -22,11 +22,7 @@ class Database:
         # =====================================================
 
         self.stats_db = self._client["jiosaavnV2_stats"]
-
-        # Search counter
         self.search_collection = self.stats_db.searches
-
-        # Groups where bot has been used
         self.group_collection = self.stats_db.groups
 
         # =====================================================
@@ -50,16 +46,19 @@ class Database:
         self.vc_cache_db = self._client["jiosaavnV2_vc_cache"]
         self.vc_file_cache = self.vc_cache_db.vc_file_cache
 
+        # =====================================================
+        # CHAT SETTINGS
+        # =====================================================
+
+        self.settings_db = self._client["jiosaavnV2_settings"]
+        self.chat_settings = self.settings_db.chat_settings
+
     # =========================================================
     # USER DATABASE
     # =========================================================
 
     @staticmethod
     def new_user(user_id: int) -> dict:
-        """
-        Creates a new user dictionary with default values.
-        """
-
         return {
             "id": user_id,
             "join_date": datetime.date.today().isoformat(),
@@ -111,8 +110,7 @@ class Database:
         return bool(item)
 
     async def get_song(self, song_id: str) -> dict:
-        song = await self.id_collection.find_one({"id": song_id})
-        return song
+        return await self.id_collection.find_one({"id": song_id})
 
     async def update_song(self, song_id: str, quality: str, chat_id: int, message_id: int):
         update_fields = {
