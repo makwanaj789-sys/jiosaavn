@@ -3,7 +3,7 @@
 from jiosaavn.emojis import *
 
 
-class TEXT:
+class TEXT:y
 
     # ==================== START ====================
 
