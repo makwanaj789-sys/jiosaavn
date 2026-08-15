@@ -281,36 +281,36 @@ def now_playing_markup(is_paused=False):
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(
-                "▶️ Resume" if is_paused else "⏸️ Pause",
+                "ʀᴇꜱᴜᴍᴇ" if is_paused else "ᴘᴀᴜꜱᴇ",
                 callback_data="vc_resume" if is_paused else "vc_pause",
                 style=enums.ButtonStyle.SUCCESS
             ),
             InlineKeyboardButton(
-                "⏭️ Skip",
+                "ꜱᴋɪᴘ",
                 callback_data="vc_skip",
                 style=enums.ButtonStyle.SUCCESS
             ),
         ],
         [
             InlineKeyboardButton(
-                "📋 Queue",
+                "Qᴜᴇᴜᴇ",
                 callback_data="vc_queue",
                 style=enums.ButtonStyle.PRIMARY
             ),
             InlineKeyboardButton(
-                "❤️ Favorite",
+                "ꜰᴀᴠᴏʀɪᴛᴇ",
                 callback_data="vc_fav",
                 style=enums.ButtonStyle.DANGER
             )
         ],
         [
             InlineKeyboardButton(
-                "➕ Add Me",
+                "ᴀᴅᴅ ᴍᴇ",
                 url="https://t.me/AartiMusic_bot?startgroup=true",
                 style=enums.ButtonStyle.PRIMARY
             ),
             InlineKeyboardButton(
-                "✖️ Cancel",
+                "ᴄᴀɴᴄᴇʟ",
                 callback_data="vc_stop",
                 style=enums.ButtonStyle.SUCCESS
             ),
