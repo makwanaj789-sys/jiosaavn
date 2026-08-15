@@ -1,5 +1,5 @@
 import logging
-from pyrogram import filters
+from pyrogram import filters, enums
 from pyrogram.types import (
     Message,
     CallbackQuery,
@@ -8,6 +8,7 @@ from pyrogram.types import (
 )
 
 from jiosaavn.bot import Bot
+from jiosaavn.emojis import *
 from api.favorites import FavoritesManager
 from api.cache import CacheManager
 
@@ -15,9 +16,34 @@ logger = logging.getLogger(__name__)
 
 
 def favorite_button(video_id: str, is_fav: bool):
-    if is_fav:
-        return InlineKeyboardButton("💔 Remove Favorite", callback_data=f"fav_remove_{video_id}")
-    return InlineKeyboardButton("❤️ Add to Favorites", callback_data=f"fav_add_{video_id}")
+    return InlineKeyboardButton(
+        "ʀᴇᴍᴏᴠᴇ ꜰᴀᴠᴏʀɪᴛᴇ" if is_fav else "ᴀᴅᴅ ᴛᴏ ꜰᴀᴠᴏʀɪᴛᴇꜱ",
+        callback_data=f"fav_remove_{video_id}" if is_fav else f"fav_add_{video_id}",
+        style=enums.ButtonStyle.DANGER,
+        icon_custom_emoji_id="5255861796350224063"
+    )
+
+
+def audio_markup(video_id: str, is_fav: bool):
+    return InlineKeyboardMarkup([
+        [favorite_button(video_id, is_fav)],
+        [
+            InlineKeyboardButton(
+                "ꜱᴇᴀʀᴄʜ ᴀɢᴀɪɴ",
+                switch_inline_query_current_chat="",
+                style=enums.ButtonStyle.PRIMARY,
+                icon_custom_emoji_id="6318752565865482087"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ",
+                url="https://t.me/AartiMusic_bot?startgroup=true",
+                style=enums.ButtonStyle.SUCCESS,
+                icon_custom_emoji_id="5861735798956627072"
+            )
+        ]
+    ])
 
 
 @Bot.on_callback_query(filters.regex(r"^fav_add_"))
@@ -42,13 +68,12 @@ async def fav_add(client: Bot, callback: CallbackQuery):
             uploader=song.get("uploader", "")
         )
 
-        await callback.answer("❤️ Added to Favorites!", show_alert=False)
+        await callback.answer("❤️ Added to your favorites!", show_alert=False)
 
         try:
-            new_markup = InlineKeyboardMarkup([
-                [favorite_button(video_id, is_fav=True)]
-            ])
-            await callback.edit_message_reply_markup(new_markup)
+            await callback.edit_message_reply_markup(
+                InlineKeyboardMarkup([[favorite_button(video_id, is_fav=True)]])
+            )
         except Exception:
             pass
 
@@ -66,13 +91,12 @@ async def fav_remove(client: Bot, callback: CallbackQuery):
         favorites = FavoritesManager(client.db)
         await favorites.remove(user_id, video_id)
 
-        await callback.answer("💔 Removed from Favorites", show_alert=False)
+        await callback.answer("💔 Removed from your favorites", show_alert=False)
 
         try:
-            new_markup = InlineKeyboardMarkup([
-                [favorite_button(video_id, is_fav=False)]
-            ])
-            await callback.edit_message_reply_markup(new_markup)
+            await callback.edit_message_reply_markup(
+                InlineKeyboardMarkup([[favorite_button(video_id, is_fav=False)]])
+            )
         except Exception:
             pass
 
@@ -81,33 +105,53 @@ async def fav_remove(client: Bot, callback: CallbackQuery):
         await callback.answer("❌ Something went wrong.", show_alert=True)
 
 
-@Bot.on_message(filters.command("myfavorites") & filters.private)
+@Bot.on_message(filters.command("myfavorites"))
 async def my_favorites(client: Bot, message: Message):
     try:
         favorites = FavoritesManager(client.db)
         songs = await favorites.list_favorites(message.from_user.id)
 
         if not songs:
-            await message.reply("💔 Aapki favorites list khaali hai.\n\nKisi gaane ke neeche ❤️ button dabao usse add karne ke liye.")
+            await message.reply(
+                f"**◈ ʏᴏᴜʀ ᴠᴀᴜʟᴛ ɪꜱ ᴇᴍᴘᴛʏ ◈**\n\n"
+                f">{E_HEART} You haven't saved any tracks yet.\n"
+                f">Tap the ꜰᴀᴠᴏʀɪᴛᴇ button under any\n"
+                f">song to start your collection.\n\n"
+                f"__{E_SPARKLE} Then use `/favshuffle` to play them all__"
+            )
             return
 
         buttons = []
         for song in songs:
-            title = song.get("title", "Unknown")[:45]
+            title = song.get("title", "Unknown")[:50]
             buttons.append([
-                InlineKeyboardButton(f"🎵 {title}", callback_data=f"fav_play_{song['video_id']}")
+                InlineKeyboardButton(
+                    title,
+                    callback_data=f"fav_play_{song['video_id']}",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5911274703367968100"
+                )
             ])
 
-        buttons.append([InlineKeyboardButton("Close ❌", callback_data="close")])
+        buttons.append([
+            InlineKeyboardButton(
+                "ᴄʟᴏꜱᴇ",
+                callback_data="close",
+                style=enums.ButtonStyle.DANGER,
+                icon_custom_emoji_id="5974083768233760323"
+            )
+        ])
 
         await message.reply(
-            f"❤️ **Your Favorites** ({len(songs)})\n\nGaane par tap karo sunne ke liye:",
+            f"**◈ ʏᴏᴜʀ ᴠᴀᴜʟᴛ ◈**\n\n"
+            f">{E_HEARTS} `{len(songs)}` saved tracks\n\n"
+            f"__{E_SPARKLE} Tap any track to play it__",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
 
     except Exception as e:
         logger.error(f"myfavorites error: {e}")
-        await message.reply(f"❌ Error: {e}")
+        await message.reply(f"**◈ ᴇʀʀᴏʀ ◈**\n\n>`{e}`")
 
 
 @Bot.on_callback_query(filters.regex(r"^fav_play_"))
@@ -124,15 +168,11 @@ async def fav_play(client: Bot, callback: CallbackQuery):
         await callback.answer()
 
         await client.send_audio(
-            chat_id=callback.message.chat.id,   # 🔥 FIX: jahan se tap hua wahi bhejo (group/DM dono)
+            chat_id=callback.message.chat.id,
             audio=song["file_id"],
             title=song["title"],
             performer=song.get("uploader", "YouTube"),
-            reply_markup=InlineKeyboardMarkup([
-                [favorite_button(video_id, is_fav=True)],
-                [InlineKeyboardButton("🎵 Search Again", switch_inline_query_current_chat="")],
-                [InlineKeyboardButton("➕ Add me to your group", url="https://t.me/AartiMusic_bot?startgroup=true")]
-            ])
+            reply_markup=audio_markup(video_id, is_fav=True)
         )
 
     except Exception as e:
