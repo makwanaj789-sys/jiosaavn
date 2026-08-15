@@ -2,6 +2,7 @@ import asyncio
 import logging
 import uuid
 
+from pyrogram import enums
 from pyrogram.types import (
     InlineQueryResultCachedAudio,
     InlineQueryResultArticle,
@@ -11,10 +12,40 @@ from pyrogram.types import (
 )
 
 from jiosaavn.bot import Bot
+from jiosaavn.emojis import *
 from api.search_engine import SearchEngine
 from api.inline_helper import InlineHelper
 
 logger = logging.getLogger(__name__)
+
+
+def inline_audio_markup(video_id: str):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "ᴀᴅᴅ ᴛᴏ ꜰᴀᴠᴏʀɪᴛᴇꜱ",
+                callback_data=f"fav_add_{video_id}",
+                style=enums.ButtonStyle.DANGER,
+                icon_custom_emoji_id="5255861796350224063"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "ꜱᴇᴀʀᴄʜ ᴀɢᴀɪɴ",
+                switch_inline_query_current_chat="",
+                style=enums.ButtonStyle.PRIMARY,
+                icon_custom_emoji_id="6318752565865482087"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ",
+                url="https://t.me/AartiMusic_bot?startgroup=true",
+                style=enums.ButtonStyle.SUCCESS,
+                icon_custom_emoji_id="5861735798956627072"
+            )
+        ]
+    ])
 
 
 async def build_result(helper, song):
@@ -29,24 +60,24 @@ async def build_result(helper, song):
         return InlineQueryResultCachedAudio(
             id=f"cached_{song['id']}",
             audio_file_id=cache["file_id"],
-            caption=f"🎵 {cache['title']}",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔍 Search Again", switch_inline_query_current_chat="")
-            ],
-                [InlineKeyboardButton("➕ Add me to your group", url="https://t.me/AartiMusic_bot?startgroup=true")]
-])
+            caption=f"{E_TRACK} **{cache['title']}**\n\n__{E_SPARKLE} ᴠɪᴀ ᴀᴀʀᴛɪᴍᴜꜱɪᴄ__",
+            reply_markup=inline_audio_markup(song["id"])
         )
 
     return InlineQueryResultArticle(
         id=f"dl_{song['id']}",
-        title=f"🎵 {song['title'][:60]}",
-        description=f"👤 {song.get('uploader', 'Unknown')[:60]}",
+        title=song["title"][:60],
+        description=f"{song.get('uploader', 'Unknown')[:60]}",
         thumb_url=thumbnail_url,
         input_message_content=InputTextMessageContent(
-            f"🎵 𝘍𝘦𝘵𝘤𝘩𝘪𝘯𝘨: {song['title']}..."
+            f"{E_DOWNLOAD} **ꜰᴇᴛᴄʜɪɴɢ…**\n\n>{song['title']}"
         ),
         reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("⏳ Loading...", callback_data="loading")
+            InlineKeyboardButton(
+                "ʟᴏᴀᴅɪɴɢ…",
+                callback_data="loading",
+                style=enums.ButtonStyle.PRIMARY
+            )
         ]])
     )
 
@@ -55,7 +86,6 @@ async def build_result(helper, song):
 async def inline_query(client, inline_query):
     query = inline_query.query.strip()
 
-    # 🔥 STATS: user track karo (empty query pe bhi, kyunki user ne bot open kiya)
     if inline_query.from_user:
         try:
             exists = await client.db.is_user_exist(inline_query.from_user.id)
@@ -68,20 +98,21 @@ async def inline_query(client, inline_query):
         results = [
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
-                title="AMusic 🎵",
+                title="ᴀᴀʀᴛɪ ᴍᴜꜱɪᴄ",
                 thumb_url="https://raw.githubusercontent.com/makwanaj789-sys/Umclon-reset-file/main/thumb.jpg",
-                description="🎧 Search any song, Aarti will find it...",
+                description="Type a song name — I'll find it for you",
                 input_message_content=InputTextMessageContent(
-                    "🎵 AartiMusic se gaana search karo!"
+                    f"{E_SEARCH} **ᴀᴀʀᴛɪ ᴍᴜꜱɪᴄ**\n\n"
+                    f">Type `@AartiMusic_bot` followed by\n"
+                    f">any song name to search."
                 ),
             )
         ]
         await inline_query.answer(results=results, cache_time=1, is_personal=True)
         return
 
-    logger.info(f"📥 INLINE QUERY RECEIVED: '{query}' from user {inline_query.from_user.id}")
+    logger.info(f"📥 INLINE QUERY: '{query}' from user {inline_query.from_user.id}")
 
-    # 🔥 STATS: search count badhao
     try:
         await client.db.add_search(
             user_id=inline_query.from_user.id,
@@ -101,10 +132,6 @@ async def inline_query(client, inline_query):
 
     tasks = [build_result(helper, song) for song in response["results"]]
     results = await asyncio.gather(*tasks, return_exceptions=False)
-
-    for r in results:
-        has_markup = r.reply_markup is not None
-        logger.info(f"📤 Result id={r.id} has_reply_markup={has_markup}")
 
     await inline_query.answer(results=results, cache_time=0, is_personal=True)
     logger.info(f"✅ ANSWERED query '{query}' with {len(results)} results")
