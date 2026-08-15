@@ -23,10 +23,30 @@ from api.search_engine import SearchEngine
 from api.thumbnail import generate_now_playing_card
 from api.favorites import FavoritesManager
 from api.local_cache import LocalCacheManager
+from api.settings import SettingsManager
 
 logger = logging.getLogger(__name__)
 
 assistant_client: Assistant = None
+
+# ============================================================
+# PREMIUM (CUSTOM) EMOJI
+# ============================================================
+
+E_MUSIC = '<tg-emoji emoji-id="5217933090483098080">🎵</tg-emoji>'
+E_PHONE = '<tg-emoji emoji-id="5247176827016847212">📞</tg-emoji>'
+E_LOADING = '<tg-emoji emoji-id="5253464392850221514">🔃</tg-emoji>'
+E_SEARCH = '<tg-emoji emoji-id="6318752565865482087">🔍</tg-emoji>'
+E_USER = '<tg-emoji emoji-id="5256143829672672750">👤</tg-emoji>'
+E_SHIELD = '<tg-emoji emoji-id="5197288647275071607">🛡</tg-emoji>'
+E_SPEAK = '<tg-emoji emoji-id="5391247205698912640">🗣</tg-emoji>'
+E_DIAMOND = '<tg-emoji emoji-id="6039330304349443035">💎</tg-emoji>'
+E_LINK = '<tg-emoji emoji-id="5859270552153231910">🔗</tg-emoji>'
+E_CHECK = '<tg-emoji emoji-id="5861735798956627072">✅</tg-emoji>'
+E_MEGA = '<tg-emoji emoji-id="5859264006623072192">📣</tg-emoji>'
+E_DOWNLOAD = '<tg-emoji emoji-id="5859241651318297347">📥</tg-emoji>'
+E_WRITE = '<tg-emoji emoji-id="6124975405385391463">✍️</tg-emoji>'
+E_DEV = '<tg-emoji emoji-id="6174508000489768736">🧑‍💻</tg-emoji>'
 
 queues = defaultdict(list)
 active_chats = set()
@@ -64,6 +84,19 @@ async def is_admin(client: Bot, chat_id: int, user_id: int) -> bool:
     except Exception as e:
         logger.warning(f"is_admin check failed for {user_id} in {chat_id}: {e}")
         return False
+
+
+async def can_control(client: Bot, chat_id: int, user_id: int) -> bool:
+    """
+    Respects the chat's play permission mode set via /set.
+    """
+    sm = SettingsManager(client.db)
+    mode = await sm.get_play_mode(chat_id)
+
+    if mode == "everyone":
+        return True
+
+    return await is_admin(client, chat_id, user_id)
 
 
 async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
@@ -131,8 +164,7 @@ def get_audio_duration(filepath: str) -> int:
             text=True,
             timeout=15
         )
-        duration = float(result.stdout.strip())
-        return int(duration)
+        return int(float(result.stdout.strip()))
     except Exception as e:
         logger.warning(f"ffprobe duration error for {filepath}: {e}")
         return 0
@@ -323,15 +355,15 @@ async def send_now_playing_card(client: Bot, chat_id: int, song: dict, started_b
     youtube_url = f"https://youtube.com/watch?v={song['video_id']}"
 
     caption = (
-        f"**◈ NOW STREAMING ◈**\n\n"
-        f">🎵 [{song['title']}]({youtube_url})\n"
-        f">👤 {song.get('uploader', 'Unknown')}"
+        f"**◈ ɴᴏᴡ ꜱᴛʀᴇᴀᴍɪɴɢ ◈**\n\n"
+        f">{E_MUSIC} [{song['title']}]({youtube_url})\n"
+        f">{E_USER} {song.get('uploader', 'Unknown')}"
     )
 
     if started_by:
-        caption += f"\n>🎚 Requested by {started_by}"
+        caption += f"\n>{E_SPEAK} ʀᴇQᴜᴇꜱᴛᴇᴅ ʙʏ {started_by}"
 
-    caption += "\n\n__♫ powered by AartiMusic ♫__"
+    caption += f"\n\n__{E_DIAMOND} ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴀᴀʀᴛɪᴍᴜꜱɪᴄ__"
 
     card_path = generate_now_playing_card(
         song["thumbnail"], song["title"], song.get("uploader", "Unknown")
@@ -451,33 +483,40 @@ def user_mention(message_or_callback):
 @Bot.on_message(filters.command("vplay") & filters.group)
 async def voice_play(client: Bot, message: Message):
     if not assistant_client or not assistant_client.call_py:
-        await message.reply("🚫 **Voice chat engine isn't ready yet.**")
+        await message.reply(f"{E_SHIELD} **ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ᴇɴɢɪɴᴇ ɪꜱɴ'ᴛ ʀᴇᴀᴅʏ ʏᴇᴛ**")
+        return
+
+    chat_id = message.chat.id
+
+    if not await can_control(client, chat_id, message.from_user.id):
+        await message.reply(
+            f"**◈ ᴀᴅᴍɪɴꜱ ᴏɴʟʏ ◈**\n\n"
+            f">{E_SHIELD} Only admins can start playback here.\n"
+            f">{E_WRITE} An admin can change this with `/set`"
+        )
         return
 
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
         await message.reply(
-            "**◈ MISSING TRACK NAME ◈**\n\n"
-            ">Tell me what to play.\n"
-            ">Example: `/vplay Alan Walker Faded`"
+            f"**◈ ᴍɪꜱꜱɪɴɢ ᴛʀᴀᴄᴋ ɴᴀᴍᴇ ◈**\n\n"
+            f">{E_WRITE} Tell me what to play.\n"
+            f">Example: `/vplay Alan Walker Faded`"
         )
         return
 
     query = parts[1].strip()
-    chat_id = message.chat.id
     requester = user_mention(message)
 
-    status_msg = await message.reply(
-        "**◈ SEARCHING ◈**\n\n"
-        ">🔎 Finding your track…"
-    )
+    # Searching — magnifier emoji only, no text
+    status_msg = await message.reply(E_SEARCH)
 
     try:
         song = await get_song_ready(query, client.db)
         if not song:
             await status_msg.edit_text(
-                "**◈ NOT FOUND ◈**\n\n"
-                ">Couldn't find or download that track."
+                f"**◈ ɴᴏᴛ ꜰᴏᴜɴᴅ ◈**\n\n"
+                f">Couldn't find or download that track."
             )
             return
 
@@ -487,28 +526,28 @@ async def voice_play(client: Bot, message: Message):
         if is_actually_active:
             queues[chat_id].append(song)
             await status_msg.edit_text(
-                f"**◈ ADDED TO QUEUE ◈**\n\n"
-                f">🎵 **{song['title']}**\n"
-                f">📍 Position `#{len(queues[chat_id])}`\n"
-                f">👤 Added by {requester}"
+                f"**◈ ᴀᴅᴅᴇᴅ ᴛᴏ Qᴜᴇᴜᴇ ◈**\n\n"
+                f">{E_MUSIC} **{song['title']}**\n"
+                f">{E_DOWNLOAD} Position `#{len(queues[chat_id])}`\n"
+                f">{E_USER} Added by {requester}"
             )
             start_prefetch(chat_id)
             return
 
         active_chats.discard(chat_id)
 
+        # Magnifier message morphs into the connecting message
         await status_msg.edit_text(
-            "**◈ CONNECTING ◈**\n\n"
-            ">📞 Joining voice chat…"
+            f"{E_PHONE} **ᴊᴏɪɴɪɴɢ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ…**"
         )
 
         joined = await ensure_assistant_in_chat(client, chat_id)
         if not joined:
             await status_msg.edit_text(
-                "**◈ ACCESS DENIED ◈**\n\n"
-                ">Couldn't add the assistant to this group.\n"
-                ">Make sure the bot is an **admin** with\n"
-                ">permission to invite users."
+                f"**◈ ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ◈**\n\n"
+                f">{E_SHIELD} Couldn't add the assistant here.\n"
+                f">Make sure the bot is an **admin** with\n"
+                f">permission to invite users."
             )
             return
 
@@ -533,16 +572,25 @@ async def voice_play(client: Bot, message: Message):
 
     except Exception as e:
         logger.error(f"voice_play error: {e}")
-        await status_msg.edit_text(f"**◈ ERROR ◈**\n\n>`{e}`")
+        await status_msg.edit_text(f"**◈ ᴇʀʀᴏʀ ◈**\n\n>`{e}`")
 
 
 @Bot.on_message(filters.command(["favshuffle", "shuffle"]) & filters.group)
 async def voice_shuffle(client: Bot, message: Message):
     if not assistant_client or not assistant_client.call_py:
-        await message.reply("🚫 **Voice chat engine isn't ready yet.**")
+        await message.reply(f"{E_SHIELD} **ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ᴇɴɢɪɴᴇ ɪꜱɴ'ᴛ ʀᴇᴀᴅʏ ʏᴇᴛ**")
         return
 
     chat_id = message.chat.id
+
+    if not await can_control(client, chat_id, message.from_user.id):
+        await message.reply(
+            f"**◈ ᴀᴅᴍɪɴꜱ ᴏɴʟʏ ◈**\n\n"
+            f">{E_SHIELD} Only admins can start playback here.\n"
+            f">{E_WRITE} An admin can change this with `/set`"
+        )
+        return
+
     requester = user_mention(message)
 
     favorites = FavoritesManager(client.db)
@@ -550,19 +598,15 @@ async def voice_shuffle(client: Bot, message: Message):
 
     if not fav_songs:
         await message.reply(
-            "**◈ YOUR VAULT IS EMPTY ◈**\n\n"
-            ">You haven't saved any tracks yet.\n"
-            ">Tap ❤️ on any playing song to start\n"
-            ">building your personal collection.\n\n"
-            "__Then come back and let the shuffle work its magic ✨__"
+            f"**◈ ʏᴏᴜʀ ᴠᴀᴜʟᴛ ɪꜱ ᴇᴍᴘᴛʏ ◈**\n\n"
+            f">You haven't saved any tracks yet.\n"
+            f">Tap the ꜰᴀᴠᴏʀɪᴛᴇ button on any playing\n"
+            f">song to start building your collection.\n\n"
+            f"__{E_DIAMOND} Then come back and let the shuffle work its magic__"
         )
         return
 
-    status_msg = await message.reply(
-        f"**◈ SHUFFLE MODE ◈**\n\n"
-        f">🔀 Loading `{len(fav_songs)}` tracks from your vault\n"
-        f">⏳ Preparing the first track…"
-    )
+    status_msg = await message.reply(E_SEARCH)
 
     try:
         shuffled = fav_songs.copy()
@@ -581,8 +625,8 @@ async def voice_shuffle(client: Bot, message: Message):
             result = await engine.download_song(first_video_id)
             if not result or not result.get("success"):
                 await status_msg.edit_text(
-                    "**◈ DOWNLOAD FAILED ◈**\n\n"
-                    ">Couldn't prepare the first track."
+                    f"**◈ ᴅᴏᴡɴʟᴏᴀᴅ ꜰᴀɪʟᴇᴅ ◈**\n\n"
+                    f">Couldn't prepare the first track."
                 )
                 return
             first_path = result["data"]["filepath"]
@@ -613,26 +657,25 @@ async def voice_shuffle(client: Bot, message: Message):
         if is_actually_active:
             queues[chat_id].insert(0, first_song)
             await status_msg.edit_text(
-                f"**◈ SHUFFLE QUEUED ◈**\n\n"
-                f">🔀 Added `{len(fav_songs)}` shuffled tracks\n"
-                f">📋 Queue size `{len(queues[chat_id])}`"
+                f"**◈ ꜱʜᴜꜰꜰʟᴇ Qᴜᴇᴜᴇᴅ ◈**\n\n"
+                f">{E_LOADING} Added `{len(fav_songs)}` shuffled tracks\n"
+                f">{E_MUSIC} Queue size `{len(queues[chat_id])}`"
             )
             start_prefetch(chat_id)
             return
 
         active_chats.discard(chat_id)
         await status_msg.edit_text(
-            "**◈ CONNECTING ◈**\n\n"
-            ">📞 Joining voice chat…"
+            f"{E_PHONE} **ᴊᴏɪɴɪɴɢ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ…**"
         )
 
         joined = await ensure_assistant_in_chat(client, chat_id)
         if not joined:
             await status_msg.edit_text(
-                "**◈ ACCESS DENIED ◈**\n\n"
-                ">Couldn't add the assistant to this group.\n"
-                ">Make sure the bot is an **admin** with\n"
-                ">permission to invite users."
+                f"**◈ ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ◈**\n\n"
+                f">{E_SHIELD} Couldn't add the assistant here.\n"
+                f">Make sure the bot is an **admin** with\n"
+                f">permission to invite users."
             )
             return
 
@@ -645,7 +688,7 @@ async def voice_shuffle(client: Bot, message: Message):
         )
 
         active_chats.add(chat_id)
-        started_by = f"{requester} 🔀"
+        started_by = f"{requester} {E_LOADING}"
         last_action_user.setdefault(chat_id, {})["play"] = started_by
         await status_msg.delete()
 
@@ -658,22 +701,22 @@ async def voice_shuffle(client: Bot, message: Message):
 
     except Exception as e:
         logger.error(f"voice_shuffle error: {e}")
-        await status_msg.edit_text(f"**◈ ERROR ◈**\n\n>`{e}`")
+        await status_msg.edit_text(f"**◈ ᴇʀʀᴏʀ ◈**\n\n>`{e}`")
 
 
 @Bot.on_callback_query(filters.regex(r"^vc_pause$"))
 async def cb_pause(client: Bot, callback: CallbackQuery):
     chat_id = callback.message.chat.id
 
-    if not await is_admin(client, chat_id, callback.from_user.id):
-        await callback.answer("🔒 Only admins can control playback.", show_alert=True)
+    if not await can_control(client, chat_id, callback.from_user.id):
+        await callback.answer("🔒 ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄᴏɴᴛʀᴏʟ ᴘʟᴀʏʙᴀᴄᴋ", show_alert=True)
         return
 
     try:
         await assistant_client.call_py.pause(chat_id)
         paused_chats.add(chat_id)
         last_action_user.setdefault(chat_id, {})["pause"] = user_mention(callback)
-        await callback.answer("⏸️ Paused")
+        await callback.answer("⏸️ ᴘᴀᴜꜱᴇᴅ")
         await callback.edit_message_reply_markup(now_playing_markup(is_paused=True))
     except Exception as e:
         await callback.answer(f"❌ {e}", show_alert=True)
@@ -683,14 +726,14 @@ async def cb_pause(client: Bot, callback: CallbackQuery):
 async def cb_resume(client: Bot, callback: CallbackQuery):
     chat_id = callback.message.chat.id
 
-    if not await is_admin(client, chat_id, callback.from_user.id):
-        await callback.answer("🔒 Only admins can control playback.", show_alert=True)
+    if not await can_control(client, chat_id, callback.from_user.id):
+        await callback.answer("🔒 ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄᴏɴᴛʀᴏʟ ᴘʟᴀʏʙᴀᴄᴋ", show_alert=True)
         return
 
     try:
         await assistant_client.call_py.resume(chat_id)
         paused_chats.discard(chat_id)
-        await callback.answer("▶️ Resumed")
+        await callback.answer("▶️ ʀᴇꜱᴜᴍᴇᴅ")
         await callback.edit_message_reply_markup(now_playing_markup(is_paused=False))
     except Exception as e:
         await callback.answer(f"❌ {e}", show_alert=True)
@@ -700,18 +743,18 @@ async def cb_resume(client: Bot, callback: CallbackQuery):
 async def cb_skip(client: Bot, callback: CallbackQuery):
     chat_id = callback.message.chat.id
 
-    if not await is_admin(client, chat_id, callback.from_user.id):
-        await callback.answer("🔒 Only admins can control playback.", show_alert=True)
+    if not await can_control(client, chat_id, callback.from_user.id):
+        await callback.answer("🔒 ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄᴏɴᴛʀᴏʟ ᴘʟᴀʏʙᴀᴄᴋ", show_alert=True)
         return
 
     skipper = user_mention(callback)
-    await callback.answer("⏭️ Skipping...")
+    await callback.answer("⏭️ ꜱᴋɪᴘᴘɪɴɢ…")
 
     if not queues[chat_id]:
         await callback.message.reply(
-            f"**◈ QUEUE EMPTY ◈**\n\n"
+            f"**◈ Qᴜᴇᴜᴇ ᴇᴍᴘᴛʏ ◈**\n\n"
             f">Nothing left to skip to.\n"
-            f">Stopped by {skipper}"
+            f">{E_USER} Stopped by {skipper}"
         )
         cancel_monitor(chat_id)
         cancel_prefetch(chat_id)
@@ -738,8 +781,8 @@ async def cb_skip(client: Bot, callback: CallbackQuery):
 async def cb_stop(client: Bot, callback: CallbackQuery):
     chat_id = callback.message.chat.id
 
-    if not await is_admin(client, chat_id, callback.from_user.id):
-        await callback.answer("🔒 Only admins can control playback.", show_alert=True)
+    if not await can_control(client, chat_id, callback.from_user.id):
+        await callback.answer("🔒 ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄᴏɴᴛʀᴏʟ ᴘʟᴀʏʙᴀᴄᴋ", show_alert=True)
         return
 
     stopper = user_mention(callback)
@@ -752,10 +795,10 @@ async def cb_stop(client: Bot, callback: CallbackQuery):
 
     try:
         await assistant_client.call_py.leave_call(chat_id)
-        await callback.answer("⏹️ Stopped")
+        await callback.answer("⏹️ ꜱᴛᴏᴘᴘᴇᴅ")
         try:
             await callback.message.edit_caption(
-                (callback.message.caption or "") + f"\n\n>⏹️ Stopped by {stopper}",
+                (callback.message.caption or "") + f"\n\n>{E_SHIELD} ꜱᴛᴏᴘᴘᴇᴅ ʙʏ {stopper}",
                 reply_markup=None
             )
         except Exception:
@@ -770,7 +813,7 @@ async def cb_queue(client: Bot, callback: CallbackQuery):
     chat_id = callback.message.chat.id
 
     if not queues[chat_id]:
-        await callback.answer("📭 Queue is empty", show_alert=True)
+        await callback.answer("📭 Qᴜᴇᴜᴇ ɪꜱ ᴇᴍᴘᴛʏ", show_alert=True)
         return
 
     text = "\n".join(
@@ -790,7 +833,7 @@ async def cb_fav(client: Bot, callback: CallbackQuery):
     song = now_playing_song.get(chat_id)
 
     if not song:
-        await callback.answer("❌ Nothing is playing right now.", show_alert=True)
+        await callback.answer("❌ ɴᴏᴛʜɪɴɢ ɪꜱ ᴘʟᴀʏɪɴɢ ʀɪɢʜᴛ ɴᴏᴡ", show_alert=True)
         return
 
     try:
@@ -827,14 +870,14 @@ async def cb_fav(client: Bot, callback: CallbackQuery):
 async def voice_skip(client: Bot, message: Message):
     chat_id = message.chat.id
 
-    if not await is_admin(client, chat_id, message.from_user.id):
-        await message.reply("🔒 **Only admins can control playback.**")
+    if not await can_control(client, chat_id, message.from_user.id):
+        await message.reply(f"{E_SHIELD} **ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄᴏɴᴛʀᴏʟ ᴘʟᴀʏʙᴀᴄᴋ**")
         return
 
     if not queues[chat_id]:
         await message.reply(
-            "**◈ QUEUE EMPTY ◈**\n\n"
-            ">Nothing left to skip to."
+            f"**◈ Qᴜᴇᴜᴇ ᴇᴍᴘᴛʏ ◈**\n\n"
+            f">Nothing left to skip to."
         )
         cancel_monitor(chat_id)
         cancel_prefetch(chat_id)
@@ -847,7 +890,7 @@ async def voice_skip(client: Bot, message: Message):
             pass
         return
 
-    await message.reply("**◈ SKIPPING ◈**\n\n>⏭️ Loading next track…")
+    await message.reply(f"{E_LOADING} **ꜱᴋɪᴘᴘɪɴɢ…**")
     await play_next(chat_id)
 
 
@@ -855,8 +898,8 @@ async def voice_skip(client: Bot, message: Message):
 async def voice_stop(client: Bot, message: Message):
     chat_id = message.chat.id
 
-    if not await is_admin(client, chat_id, message.from_user.id):
-        await message.reply("🔒 **Only admins can control playback.**")
+    if not await can_control(client, chat_id, message.from_user.id):
+        await message.reply(f"{E_SHIELD} **ᴏɴʟʏ ᴀᴅᴍɪɴꜱ ᴄᴀɴ ᴄᴏɴᴛʀᴏʟ ᴘʟᴀʏʙᴀᴄᴋ**")
         return
 
     queues[chat_id].clear()
@@ -869,13 +912,13 @@ async def voice_stop(client: Bot, message: Message):
     try:
         await assistant_client.call_py.leave_call(chat_id)
         await message.reply(
-            f"**◈ SESSION ENDED ◈**\n\n"
-            f">⏹️ Left the voice chat\n"
-            f">🗑 Queue cleared by {user_mention(message)}"
+            f"**◈ ꜱᴇꜱꜱɪᴏɴ ᴇɴᴅᴇᴅ ◈**\n\n"
+            f">{E_PHONE} Left the voice chat\n"
+            f">{E_USER} Queue cleared by {user_mention(message)}"
         )
         now_playing_msg.pop(chat_id, None)
     except Exception as e:
-        await message.reply(f"**◈ ERROR ◈**\n\n>`{e}`")
+        await message.reply(f"**◈ ᴇʀʀᴏʀ ◈**\n\n>`{e}`")
 
 
 @Bot.on_message(filters.command("vqueue") & filters.group)
@@ -884,14 +927,14 @@ async def voice_queue(client: Bot, message: Message):
 
     if not queues[chat_id]:
         await message.reply(
-            "**◈ QUEUE EMPTY ◈**\n\n"
-            ">Nothing lined up right now."
+            f"**◈ Qᴜᴇᴜᴇ ᴇᴍᴘᴛʏ ◈**\n\n"
+            f">Nothing lined up right now."
         )
         return
 
-    text = "**◈ CURRENT QUEUE ◈**\n\n"
+    text = "**◈ ᴄᴜʀʀᴇɴᴛ Qᴜᴇᴜᴇ ◈**\n\n"
     for i, song in enumerate(queues[chat_id][:20], start=1):
-        text += f">`{i}.` 🎵 {song['title'][:50]}\n"
+        text += f">`{i}.` {E_MUSIC} {song['title'][:50]}\n"
 
     if len(queues[chat_id]) > 20:
         text += f"\n__…and {len(queues[chat_id]) - 20} more tracks__"
