@@ -5,7 +5,7 @@ import logging
 from jiosaavn.bot import Bot
 from jiosaavn.plugins.text import TEXT
 
-from pyrogram import filters
+from pyrogram import filters, enums
 from pyrogram.types import (
     Message,
     CallbackQuery,
@@ -78,21 +78,47 @@ async def start(client: Bot, message: Message | CallbackQuery):
         buttons = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
-                    "➕ Add me to your group",
-                    url="https://t.me/AartiMusic_bot?startgroup=true"
+                    "ᴀᴅᴅ ᴍᴇ ᴛᴏ ʏᴏᴜʀ ɢʀᴏᴜᴘ",
+                    url="https://t.me/AartiMusic_bot?startgroup=true",
+                    style=enums.ButtonStyle.SUCCESS,
+                    icon_custom_emoji_id="5861735798956627072"
                 )
             ],
             [
-                InlineKeyboardButton("💡 Help", callback_data="help"),
-                InlineKeyboardButton("📕 About", callback_data="about")
+                InlineKeyboardButton(
+                    "ʜᴇʟᴘ",
+                    callback_data="help",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5197269100878907942"
+                ),
+                InlineKeyboardButton(
+                    "ᴀʙᴏᴜᴛ",
+                    callback_data="about",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="6174508000489768736"
+                )
             ],
             [
-                InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
-                InlineKeyboardButton("📢 Updates", url="https://t.me/umclon_era")
+                InlineKeyboardButton(
+                    "ᴜᴘᴅᴀᴛᴇꜱ",
+                    url="https://t.me/umclon_era",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5859264006623072192"
+                ),
+                InlineKeyboardButton(
+                    "ᴏᴡɴᴇʀ",
+                    url="https://t.me/umclon",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5256143829672672750"
+                )
             ],
             [
-                InlineKeyboardButton("👑 Owner", url="https://t.me/umclon"),
-                InlineKeyboardButton("❌ Close", callback_data="close")
+                InlineKeyboardButton(
+                    "ᴄʟᴏꜱᴇ",
+                    callback_data="close",
+                    style=enums.ButtonStyle.DANGER,
+                    icon_custom_emoji_id="5974083768233760323"
+                )
             ]
         ])
 
@@ -157,17 +183,39 @@ async def help_handler(client: Bot, message: Message | CallbackQuery):
         buttons = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
-                    "🎵 Try inline search",
-                    switch_inline_query_current_chat=""
+                    "ᴛʀʏ ɪɴʟɪɴᴇ ꜱᴇᴀʀᴄʜ",
+                    switch_inline_query_current_chat="",
+                    style=enums.ButtonStyle.SUCCESS,
+                    icon_custom_emoji_id="6318752565865482087"
                 )
             ],
             [
-                InlineKeyboardButton("📕 About", callback_data="about"),
-                InlineKeyboardButton("⚙️ Settings", callback_data="settings")
+                InlineKeyboardButton(
+                    "ᴀʙᴏᴜᴛ",
+                    callback_data="about",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="6174508000489768736"
+                ),
+                InlineKeyboardButton(
+                    "ᴜᴘᴅᴀᴛᴇꜱ",
+                    url="https://t.me/umclon_era",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5859264006623072192"
+                )
             ],
             [
-                InlineKeyboardButton("🏠 Home", callback_data="home"),
-                InlineKeyboardButton("❌ Close", callback_data="close")
+                InlineKeyboardButton(
+                    "ʜᴏᴍᴇ",
+                    callback_data="home",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5911274703367968100"
+                ),
+                InlineKeyboardButton(
+                    "ᴄʟᴏꜱᴇ",
+                    callback_data="close",
+                    style=enums.ButtonStyle.DANGER,
+                    icon_custom_emoji_id="5974083768233760323"
+                )
             ]
         ])
 
@@ -211,15 +259,40 @@ async def about(client: Bot, message: Message | CallbackQuery):
 
         buttons = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("💡 Help", callback_data="help"),
-                InlineKeyboardButton("📢 Updates", url="https://t.me/umclon_era")
+                InlineKeyboardButton(
+                    "ʜᴇʟᴘ",
+                    callback_data="help",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5197269100878907942"
+                ),
+                InlineKeyboardButton(
+                    "ᴜᴘᴅᴀᴛᴇꜱ",
+                    url="https://t.me/umclon_era",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5859264006623072192"
+                )
             ],
             [
-                InlineKeyboardButton("👑 Owner", url="https://t.me/umclon")
+                InlineKeyboardButton(
+                    "ᴏᴡɴᴇʀ",
+                    url="https://t.me/umclon",
+                    style=enums.ButtonStyle.SUCCESS,
+                    icon_custom_emoji_id="5256143829672672750"
+                )
             ],
             [
-                InlineKeyboardButton("🏠 Home", callback_data="home"),
-                InlineKeyboardButton("❌ Close", callback_data="close")
+                InlineKeyboardButton(
+                    "ʜᴏᴍᴇ",
+                    callback_data="home",
+                    style=enums.ButtonStyle.PRIMARY,
+                    icon_custom_emoji_id="5911274703367968100"
+                ),
+                InlineKeyboardButton(
+                    "ᴄʟᴏꜱᴇ",
+                    callback_data="close",
+                    style=enums.ButtonStyle.DANGER,
+                    icon_custom_emoji_id="5974083768233760323"
+                )
             ]
         ])
 
