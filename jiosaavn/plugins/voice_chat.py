@@ -81,6 +81,29 @@ async def can_control(client: Bot, chat_id: int, user_id: int) -> bool:
     return await is_admin(client, chat_id, user_id)
 
 
+# ============================================================
+# NO ACTIVE VOICE CHAT DETECTION
+# ============================================================
+
+NO_VC_MARKERS = (
+    "CHAT_ADMIN_REQUIRED",
+    "GROUPCALL_INVALID",
+    "NoActiveGroupCall",
+    "CreateGroupCall",
+)
+
+
+def is_no_vc_error(err: Exception) -> bool:
+    text = f"{type(err).__name__} {err}"
+    return any(m in text for m in NO_VC_MARKERS)
+
+
+VC_CLOSED_MSG = (
+    f">{E_PHONE} No voice chat is open here yet.\n"
+    f">An admin can start one, then try again."
+)
+
+
 async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
     try:
         assistant_id = (await assistant_client.app.get_me()).id
@@ -441,6 +464,10 @@ async def play_next(chat_id: int):
                 return
 
             except Exception as e:
+                if is_no_vc_error(e):
+                    logger.info(f"📴 Voice chat closed in {chat_id}, clearing queue")
+                    queues[chat_id].clear()
+                    break
                 logger.error(f"play_next error while playing '{song['title']}': {e}")
                 continue
 
@@ -529,13 +556,19 @@ async def voice_play(client: Bot, message: Message):
             )
             return
 
-        await assistant_client.call_py.play(
-            chat_id,
-            MediaStream(
-                song["filepath"],
-                audio_parameters=AudioQuality.STUDIO
+        try:
+            await assistant_client.call_py.play(
+                chat_id,
+                MediaStream(
+                    song["filepath"],
+                    audio_parameters=AudioQuality.STUDIO
+                )
             )
-        )
+        except Exception as e:
+            if is_no_vc_error(e):
+                await status_msg.edit_text(VC_CLOSED_MSG)
+                return
+            raise
 
         active_chats.add(chat_id)
         last_action_user.setdefault(chat_id, {})["play"] = requester
@@ -647,6 +680,7 @@ async def voice_shuffle(client: Bot, message: Message):
 
         joined = await ensure_assistant_in_chat(client, chat_id)
         if not joined:
+            queues[chat_id].clear()
             await status_msg.edit_text(
                 f"**◈ ᴀᴄᴄᴇꜱꜱ ᴅᴇɴɪᴇᴅ ◈**\n\n"
                 f">{E_SHIELD} Couldn't add the assistant here.\n"
@@ -655,13 +689,20 @@ async def voice_shuffle(client: Bot, message: Message):
             )
             return
 
-        await assistant_client.call_py.play(
-            chat_id,
-            MediaStream(
-                first_song["filepath"],
-                audio_parameters=AudioQuality.STUDIO
+        try:
+            await assistant_client.call_py.play(
+                chat_id,
+                MediaStream(
+                    first_song["filepath"],
+                    audio_parameters=AudioQuality.STUDIO
+                )
             )
-        )
+        except Exception as e:
+            if is_no_vc_error(e):
+                queues[chat_id].clear()
+                await status_msg.edit_text(VC_CLOSED_MSG)
+                return
+            raise
 
         active_chats.add(chat_id)
         started_by = f"{requester} {E_SHUFFLE}"
