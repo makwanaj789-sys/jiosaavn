@@ -99,7 +99,7 @@ async def inline_query(client, inline_query):
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
                 title="ᴀᴀʀᴛɪ ᴍᴜꜱɪᴄ",
-                thumb_url="https://raw.githubusercontent.com/makwanaj789-sys/Umclon-reset-file/main/thumb.jpg",
+                thumb_url="https://raw.githubusercontent.com/makwanaj789-sys/Umclon-reset-file/main/thumb.png",
                 description="Type a song name — I'll find it for you",
                 input_message_content=InputTextMessageContent(
                     f"{E_SEARCH} **ᴀᴀʀᴛɪ ᴍᴜꜱɪᴄ**\n\n"
