@@ -57,8 +57,8 @@ class SearchEngine:
             "external_downloader_args": ["-x", "16", "-s", "16", "-k", "1M"],
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
+                "preferredcodec": "m4a",
+                "preferredquality": "0",
             }],
             "outtmpl": os.path.join(tempfile.gettempdir(), "%(title)s.%(ext)s"),
         }
