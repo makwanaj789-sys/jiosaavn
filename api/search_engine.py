@@ -41,7 +41,7 @@ class SearchEngine:
         cookies_path = _get_cookies_file()
 
         self.ydl_opts_download = {
-            "format": "bestaudio[ext=m4a]/bestaudio/best",
+            "format": "bestaudio[ext=m4a]/bestaudio/18/best",
             "noplaylist": True,
             "quiet": True,
             "geo_bypass": True,
@@ -50,7 +50,7 @@ class SearchEngine:
             "remote_components": ["ejs:github"],
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["tv"]
+                    "player_client": ["web_safari", "web", "tv", "mweb"]
                 }
             },
             "external_downloader": "aria2c",
