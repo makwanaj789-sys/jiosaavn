@@ -1,10 +1,3 @@
-# jiosaavn/plugins/__init__.py
-
-"""
-Plugins Package - Sabhi Bot Handlers
-"""
-
-# 🔥 SABHI FILES IMPORT KARO
 from . import admin
 from . import commands
 from . import download_handler
@@ -12,6 +5,10 @@ from . import search_handler
 from . import text
 from . import inline_query
 from . import chosen_inline_result
+from . import favorites
+from . import settings
+from . import voice_chat
+from . import cache_warmer
 
 
 # 🔥 SABHI FILES KO __all__ MEIN ADD KARO
@@ -23,6 +20,10 @@ __all__ = [
     'text',
     'inline_query',
     'chosen_inline_result',
+    'favorites',
+    'settings',
+    'voice_chat',
+    'cache_warmer',
 ]
 
 # Debug ke liye (optional)
