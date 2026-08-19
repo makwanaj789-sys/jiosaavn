@@ -113,10 +113,12 @@ async def inline_query(client, inline_query):
 
     logger.info(f"📥 INLINE QUERY: '{query}' from user {inline_query.from_user.id}")
 
+    # STATS: search count + query text (feeds the cache warmer)
     try:
         await client.db.add_search(
             user_id=inline_query.from_user.id,
-            chat_id=0
+            chat_id=0,
+            query=query
         )
     except Exception:
         logger.exception("Search tracking error")
