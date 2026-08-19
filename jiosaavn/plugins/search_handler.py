@@ -79,11 +79,12 @@ async def search(client: Bot, message: Message):
                 f">{E_STOP} Nothing found for `{query}`"
             )
 
-        # STATS: search count
+        # STATS: search count + query text (feeds the cache warmer)
         try:
             await client.db.add_search(
                 user_id=message.from_user.id,
-                chat_id=message.chat.id
+                chat_id=message.chat.id,
+                query=query
             )
         except Exception:
             logger.exception("Search tracking error")
