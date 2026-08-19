@@ -22,7 +22,8 @@ MIN_GAP = 240        # 4 min between downloads
 MAX_GAP = 420        # up to 7 min
 MAX_PER_RUN = 12     # new tracks per automatic cycle
 CYCLE_REST = 3600    # 1 hr between cycles
-ARTIST_LIMIT = 15    # tracks pulled per /warm request
+ARTIST_LIMIT = 15    # tracks pulled per artist
+MAX_LINES = 25       # max songs in a multi-line /warm
 
 COOKIES = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -206,7 +207,7 @@ async def warmer_loop(client: Bot):
                 await asyncio.sleep(300)
                 continue
 
-            # 🔥 Manual /warm always wins — wait for it to finish
+            # Manual /warm always wins — wait for it to finish
             if manual_busy():
                 logger.info("🔥 WARMER: manual queue active, standing by")
                 await asyncio.sleep(120)
@@ -244,7 +245,7 @@ async def warmer_loop(client: Bot):
                     logger.info("🔥 WARMER: switched off mid-cycle")
                     break
 
-                # 🔥 Yield mid-cycle too if /warm arrives
+                # Yield mid-cycle too if /warm arrives
                 if manual_busy():
                     logger.info("🔥 WARMER: manual queue started, pausing cycle")
                     break
@@ -292,7 +293,7 @@ def start_warmer(client: Bot):
 
 
 # =====================================================================
-# ON-DEMAND WARMING (/warm <artist>)
+# ON-DEMAND WARMING (/warm)
 # =====================================================================
 
 async def manual_loop(client: Bot):
@@ -346,62 +347,114 @@ def ensure_manual_worker(client: Bot):
         manual_worker = asyncio.create_task(manual_loop(client))
 
 
+def already_queued(video_id: str) -> bool:
+    return any(q["video_id"] == video_id for q in manual_queue)
+
+
 @Bot.on_message(filters.command("warm") & filters.user(int(OWNER_ID)))
 async def warm_artist(client: Bot, message: Message):
     parts = message.text.split(maxsplit=1)
 
     if len(parts) < 2:
         await message.reply(
-            f"**◈ ᴍɪꜱꜱɪɴɢ ᴀʀᴛɪꜱᴛ ◈**\n\n"
-            f">{E_WRITE} Give me a name to warm.\n"
-            f">Example: `/warm Arijit Singh`"
+            f"**◈ ᴡʜᴀᴛ ꜱʜᴏᴜʟᴅ ɪ ᴡᴀʀᴍ ◈**\n\n"
+            f">{E_USER} One line = artist, top `{ARTIST_LIMIT}` tracks\n"
+            f">`/warm Arijit Singh`\n\n"
+            f">{E_TRACK} Many lines = one track each\n"
+            f">`/warm Satranga Animal`\n"
+            f">`Tauba Tauba Bad Newz`\n"
+            f">`O Maahi Dunki`"
         )
         return
 
-    artist = parts[1].strip()
+    raw = parts[1].strip()
+    lines = [l.strip() for l in raw.split("\n") if l.strip()]
+
     status = await message.reply(E_SEARCH)
 
     try:
         engine = SearchEngine()
         cache = CacheManager(client.db)
 
-        resp = await engine.search(f"{artist} songs")
-        results = (resp.get("results") or [])[:ARTIST_LIMIT]
-
-        if not results:
-            await status.edit_text(
-                f"**◈ ɴᴏᴛʜɪɴɢ ꜰᴏᴜɴᴅ ◈**\n\n"
-                f">{E_STOP} No tracks found for `{artist}`"
-            )
-            return
-
         queued = 0
         already = 0
+        missed = 0
 
-        for r in results:
-            vid = r.get("id")
-            if not vid:
-                continue
+        if len(lines) > 1:
+            # ---- Song list mode: top result for each line ----
+            for line in lines[:MAX_LINES]:
+                try:
+                    resp = await engine.search(line)
+                    results = resp.get("results") or []
 
-            if await cache.get(vid):
-                already += 1
-                continue
+                    if not results or not results[0].get("id"):
+                        missed += 1
+                        continue
 
-            if any(q["video_id"] == vid for q in manual_queue):
-                continue
+                    r = results[0]
+                    vid = r["id"]
 
-            manual_queue.append({
-                "video_id": vid,
-                "title": r.get("title", "Unknown"),
-                "uploader": r.get("uploader", artist),
-            })
-            queued += 1
+                    if await cache.get(vid):
+                        already += 1
+                        continue
+
+                    if already_queued(vid):
+                        continue
+
+                    manual_queue.append({
+                        "video_id": vid,
+                        "title": r.get("title", "Unknown"),
+                        "uploader": r.get("uploader", "Unknown"),
+                    })
+                    queued += 1
+
+                except Exception as e:
+                    logger.warning(f"warm: line '{line}' failed: {e}")
+                    missed += 1
+
+                await asyncio.sleep(3)
+
+            label = f"`{len(lines[:MAX_LINES])}` songs"
+
+        else:
+            # ---- Artist mode: pull their catalogue ----
+            artist = lines[0]
+            resp = await engine.search(f"{artist} songs")
+            results = (resp.get("results") or [])[:ARTIST_LIMIT]
+
+            if not results:
+                await status.edit_text(
+                    f"**◈ ɴᴏᴛʜɪɴɢ ꜰᴏᴜɴᴅ ◈**\n\n"
+                    f">{E_STOP} No tracks found for `{artist}`"
+                )
+                return
+
+            for r in results:
+                vid = r.get("id")
+                if not vid:
+                    continue
+
+                if await cache.get(vid):
+                    already += 1
+                    continue
+
+                if already_queued(vid):
+                    continue
+
+                manual_queue.append({
+                    "video_id": vid,
+                    "title": r.get("title", "Unknown"),
+                    "uploader": r.get("uploader", artist),
+                })
+                queued += 1
+
+            label = f"**{artist}**"
 
         if queued == 0:
             await status.edit_text(
-                f"**◈ ᴀʟʀᴇᴀᴅʏ ᴄᴀᴄʜᴇᴅ ◈**\n\n"
-                f">{E_CHECK} All `{already}` tracks for **{artist}**\n"
-                f">are already in the cache."
+                f"**◈ ɴᴏᴛʜɪɴɢ ᴛᴏ ǫᴜᴇᴜᴇ ◈**\n\n"
+                f">{E_CHECK} Already cached `{already}`\n"
+                f">{E_STOP} Not found `{missed}`"
             )
             return
 
@@ -409,14 +462,22 @@ async def warm_artist(client: Bot, message: Message):
 
         eta = (queued * (MIN_GAP + MAX_GAP) // 2) // 60
 
-        await status.edit_text(
+        text = (
             f"**◈ ᴡᴀʀᴍɪɴɢ ǫᴜᴇᴜᴇᴅ ◈**\n\n"
-            f">{E_USER} **{artist}**\n"
+            f">{E_USER} {label}\n"
             f">{E_DOWNLOAD} Queued `{queued}` new tracks\n"
             f">{E_CHECK} Already cached `{already}`\n"
+        )
+
+        if missed:
+            text += f">{E_STOP} Not found `{missed}`\n"
+
+        text += (
             f">{E_SHUFFLE} Roughly `{eta}` min to finish\n\n"
             f"__{E_SPARKLE} Automatic warming pauses until this finishes__"
         )
+
+        await status.edit_text(text)
 
     except Exception as e:
         logger.error(f"warm_artist error: {e}")
@@ -474,7 +535,7 @@ async def warmer_text(client: Bot) -> str:
         f">{E_NEXT} Manual queue `{len(manual_queue)}`\n"
         f">{mode}\n"
         f">{E_SHUFFLE} Gap `{MIN_GAP//60}–{MAX_GAP//60}` min · rest `{CYCLE_REST//60}` min\n\n"
-        f"__{E_SPARKLE} Use `/warm <artist>` to queue someone specific__"
+        f"__{E_SPARKLE} `/warm <artist>` or a list of songs, one per line__"
     )
 
 
