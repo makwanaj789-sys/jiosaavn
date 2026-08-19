@@ -307,8 +307,8 @@ async def warmer_text(client: Bot) -> str:
         f"**◈ ᴄᴀᴄʜᴇ ᴡᴀʀᴍᴇʀ ◈**\n\n"
         f">{E_SETTINGS} Status {state}\n"
         f">{E_CASSETTE} Cached tracks `{total}`\n"
-        f">{E_SHUFFLE} Up to `{MAX_PER_RUN}` per cycle\n"
-        f">{E_LOADING} Gap `{MIN_GAP//60}–{MAX_GAP//60}` min · rest `{CYCLE_REST//60}` min\n\n"
+        f">{E_DOWNLOAD} Up to `{MAX_PER_RUN}` per cycle\n"
+        f">{E_SHUFFLE} Gap `{MIN_GAP//60}–{MAX_GAP//60}` min · rest `{CYCLE_REST//60}` min\n\n"
         f"__{E_SPARKLE} Finds popular tracks on its own and caches them__"
     )
 
