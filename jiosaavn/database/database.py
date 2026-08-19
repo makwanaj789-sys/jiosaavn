@@ -127,12 +127,42 @@ class Database:
     # SEARCH ANALYTICS
     # =========================================================
 
-    async def add_search(self, user_id: int, chat_id: int = 0):
+    async def add_search(self, user_id: int, chat_id: int = 0, query: str = ""):
+        """
+        Records one music search. The query text is stored so the cache
+        warmer can learn what people actually look for.
+        """
         await self.search_collection.insert_one({
             "user_id": user_id,
             "chat_id": chat_id,
+            "query": (query or "").lower().strip()[:100],
             "created_at": datetime.datetime.now(datetime.timezone.utc)
         })
+
+    async def top_queries(self, limit: int = 50, days: int = 14):
+        """
+        Most-searched queries from the last `days` days, most popular first.
+        """
+        since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+
+        pipeline = [
+            {
+                "$match": {
+                    "created_at": {"$gte": since},
+                    "query": {"$nin": [None, ""]}
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$query",
+                    "hits": {"$sum": 1}
+                }
+            },
+            {"$sort": {"hits": -1}},
+            {"$limit": limit}
+        ]
+
+        return [doc async for doc in self.search_collection.aggregate(pipeline)]
 
     # =========================================================
     # GROUP TRACKING
