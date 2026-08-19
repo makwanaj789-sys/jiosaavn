@@ -20,21 +20,34 @@ logger = logging.getLogger(__name__)
 # ---- pacing (deliberately slow: datacenter IPs get flagged for bursts) ----
 MIN_GAP = 240        # 4 min between downloads
 MAX_GAP = 420        # up to 7 min
-MAX_PER_RUN = 12     # new tracks per cycle
+MAX_PER_RUN = 12     # new tracks per automatic cycle
 CYCLE_REST = 3600    # 1 hr between cycles
+ARTIST_LIMIT = 15    # tracks pulled per /warm request
 
 COOKIES = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "cookies.txt"
 )
 
-# YouTube pages that list what's popular right now
 DISCOVERY_URLS = [
-    "https://www.youtube.com/feed/trending?bp=4gINGgt5dG1hX2NoYXJ0cw%3D%3D",  # music tab
+    "https://www.youtube.com/feed/trending?bp=4gINGgt5dG1hX2NoYXJ0cw%3D%3D",
     "https://www.youtube.com/feed/trending",
 ]
 
 _warmer_task = None
+
+# on-demand queue (/warm) — always takes priority over automatic warming
+manual_queue = []
+manual_worker = None
+manual_active = False
+
+# stops manual + automatic warming from downloading at the same time
+download_lock = asyncio.Lock()
+
+
+def manual_busy() -> bool:
+    """True while /warm still has work to do."""
+    return manual_active or bool(manual_queue)
 
 
 # =====================================================================
@@ -172,7 +185,7 @@ async def discover_from_user_searches(db):
 
 
 # =====================================================================
-# WARMING
+# AUTOMATIC WARMING
 # =====================================================================
 
 def voice_chat_busy() -> bool:
@@ -193,6 +206,12 @@ async def warmer_loop(client: Bot):
                 await asyncio.sleep(300)
                 continue
 
+            # 🔥 Manual /warm always wins — wait for it to finish
+            if manual_busy():
+                logger.info("🔥 WARMER: manual queue active, standing by")
+                await asyncio.sleep(120)
+                continue
+
             cache = CacheManager(client.db)
             helper = InlineHelper(client)
 
@@ -201,7 +220,6 @@ async def warmer_loop(client: Bot):
             candidates += await discover_trending()
             candidates += await discover_from_artists(client.db)
 
-            # dedupe by video_id
             seen, unique = set(), []
             for c in candidates:
                 if c["video_id"] not in seen:
@@ -226,6 +244,11 @@ async def warmer_loop(client: Bot):
                     logger.info("🔥 WARMER: switched off mid-cycle")
                     break
 
+                # 🔥 Yield mid-cycle too if /warm arrives
+                if manual_busy():
+                    logger.info("🔥 WARMER: manual queue started, pausing cycle")
+                    break
+
                 if voice_chat_busy():
                     logger.info("🔥 WARMER: voice chat live, pausing")
                     await asyncio.sleep(300)
@@ -237,7 +260,9 @@ async def warmer_loop(client: Bot):
                     if await cache.get(vid):
                         continue
 
-                    song = await helper.get_or_create(vid)
+                    async with download_lock:
+                        song = await helper.get_or_create(vid)
+
                     if song:
                         done += 1
                         logger.info(f"✅ WARMER: cached '{song['title']}'")
@@ -267,7 +292,139 @@ def start_warmer(client: Bot):
 
 
 # =====================================================================
-# OWNER CONTROLS
+# ON-DEMAND WARMING (/warm <artist>)
+# =====================================================================
+
+async def manual_loop(client: Bot):
+    """Drains the on-demand queue with the same careful pacing."""
+    global manual_active
+
+    manual_active = True
+    logger.info("🎯 MANUAL: worker started")
+
+    try:
+        while manual_queue:
+            item = manual_queue.pop(0)
+
+            if voice_chat_busy():
+                manual_queue.insert(0, item)
+                logger.info("🎯 MANUAL: voice chat live, pausing")
+                await asyncio.sleep(300)
+                continue
+
+            try:
+                cache = CacheManager(client.db)
+                if await cache.get(item["video_id"]):
+                    continue
+
+                async with download_lock:
+                    helper = InlineHelper(client)
+                    song = await helper.get_or_create(item["video_id"])
+
+                if song:
+                    logger.info(f"✅ MANUAL: cached '{song['title']}'")
+                else:
+                    logger.warning(f"⚠️ MANUAL: failed '{item['title']}'")
+
+            except Exception as e:
+                logger.warning(f"MANUAL: error on '{item['title']}': {e}")
+
+            if manual_queue:
+                await asyncio.sleep(random.randint(MIN_GAP, MAX_GAP))
+
+        logger.info("🎯 MANUAL: queue drained — automatic warmer may resume")
+
+    except asyncio.CancelledError:
+        logger.info("🎯 MANUAL: cancelled")
+    finally:
+        manual_active = False
+
+
+def ensure_manual_worker(client: Bot):
+    global manual_worker
+    if manual_worker is None or manual_worker.done():
+        manual_worker = asyncio.create_task(manual_loop(client))
+
+
+@Bot.on_message(filters.command("warm") & filters.user(int(OWNER_ID)))
+async def warm_artist(client: Bot, message: Message):
+    parts = message.text.split(maxsplit=1)
+
+    if len(parts) < 2:
+        await message.reply(
+            f"**◈ ᴍɪꜱꜱɪɴɢ ᴀʀᴛɪꜱᴛ ◈**\n\n"
+            f">{E_WRITE} Give me a name to warm.\n"
+            f">Example: `/warm Arijit Singh`"
+        )
+        return
+
+    artist = parts[1].strip()
+    status = await message.reply(E_SEARCH)
+
+    try:
+        engine = SearchEngine()
+        cache = CacheManager(client.db)
+
+        resp = await engine.search(f"{artist} songs")
+        results = (resp.get("results") or [])[:ARTIST_LIMIT]
+
+        if not results:
+            await status.edit_text(
+                f"**◈ ɴᴏᴛʜɪɴɢ ꜰᴏᴜɴᴅ ◈**\n\n"
+                f">{E_STOP} No tracks found for `{artist}`"
+            )
+            return
+
+        queued = 0
+        already = 0
+
+        for r in results:
+            vid = r.get("id")
+            if not vid:
+                continue
+
+            if await cache.get(vid):
+                already += 1
+                continue
+
+            if any(q["video_id"] == vid for q in manual_queue):
+                continue
+
+            manual_queue.append({
+                "video_id": vid,
+                "title": r.get("title", "Unknown"),
+                "uploader": r.get("uploader", artist),
+            })
+            queued += 1
+
+        if queued == 0:
+            await status.edit_text(
+                f"**◈ ᴀʟʀᴇᴀᴅʏ ᴄᴀᴄʜᴇᴅ ◈**\n\n"
+                f">{E_CHECK} All `{already}` tracks for **{artist}**\n"
+                f">are already in the cache."
+            )
+            return
+
+        ensure_manual_worker(client)
+
+        eta = (queued * (MIN_GAP + MAX_GAP) // 2) // 60
+
+        await status.edit_text(
+            f"**◈ ᴡᴀʀᴍɪɴɢ ǫᴜᴇᴜᴇᴅ ◈**\n\n"
+            f">{E_USER} **{artist}**\n"
+            f">{E_DOWNLOAD} Queued `{queued}` new tracks\n"
+            f">{E_CHECK} Already cached `{already}`\n"
+            f">{E_SHUFFLE} Roughly `{eta}` min to finish\n\n"
+            f"__{E_SPARKLE} Automatic warming pauses until this finishes__"
+        )
+
+    except Exception as e:
+        logger.error(f"warm_artist error: {e}")
+        await status.edit_text(f"**◈ ᴇʀʀᴏʀ ◈**\n\n>`{e}`")
+
+
+# =====================================================================
+# OWNER PANEL
 # =====================================================================
 
 def warmer_markup(enabled: bool):
@@ -303,24 +460,26 @@ async def warmer_text(client: Bot) -> str:
 
     state = f"{E_CHECK} **ᴏɴ**" if enabled else f"{E_STOP} **ᴏꜰꜰ**"
 
+    if manual_busy():
+        mode = f"{E_DOWNLOAD} Manual warming — automatic paused"
+    elif enabled:
+        mode = f"{E_SHUFFLE} Automatic warming active"
+    else:
+        mode = f"{E_STOP} Idle"
+
     return (
         f"**◈ ᴄᴀᴄʜᴇ ᴡᴀʀᴍᴇʀ ◈**\n\n"
         f">{E_SETTINGS} Status {state}\n"
         f">{E_CASSETTE} Cached tracks `{total}`\n"
-        f">{E_DOWNLOAD} Up to `{MAX_PER_RUN}` per cycle\n"
+        f">{E_NEXT} Manual queue `{len(manual_queue)}`\n"
+        f">{mode}\n"
         f">{E_SHUFFLE} Gap `{MIN_GAP//60}–{MAX_GAP//60}` min · rest `{CYCLE_REST//60}` min\n\n"
-        f"__{E_SPARKLE} Finds popular tracks on its own and caches them__"
+        f"__{E_SPARKLE} Use `/warm <artist>` to queue someone specific__"
     )
 
 
-@Bot.on_message(filters.command("warmer"))
+@Bot.on_message(filters.command("warmer") & filters.user(int(OWNER_ID)))
 async def warmer_panel(client: Bot, message: Message):
-    logger.info(f"🔥 WARMER CMD from {message.from_user.id if message.from_user else '?'}")
-
-    if not message.from_user or message.from_user.id != int(OWNER_ID):
-        await message.reply("🔒 Owner only.")
-        return
-
     enabled = await is_enabled(client.db)
     await message.reply(await warmer_text(client), reply_markup=warmer_markup(enabled))
 
