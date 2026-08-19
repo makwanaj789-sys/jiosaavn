@@ -313,8 +313,14 @@ async def warmer_text(client: Bot) -> str:
     )
 
 
-@Bot.on_message(filters.command("warmer") & filters.user(int(OWNER_ID)))
+@Bot.on_message(filters.command("warmer"))
 async def warmer_panel(client: Bot, message: Message):
+    logger.info(f"🔥 WARMER CMD from {message.from_user.id if message.from_user else '?'}")
+
+    if not message.from_user or message.from_user.id != int(OWNER_ID):
+        await message.reply("🔒 Owner only.")
+        return
+
     enabled = await is_enabled(client.db)
     await message.reply(await warmer_text(client), reply_markup=warmer_markup(enabled))
 
