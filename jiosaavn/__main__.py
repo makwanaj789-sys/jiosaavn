@@ -35,9 +35,21 @@ async def run():
     voice_chat_module = importlib.import_module("jiosaavn.plugins.voice_chat")
     voice_chat_module.set_assistant(assistant)
 
+    # 🔥 Background cache warmer (default OFF — toggle with /warmer)
+    warmer_task = None
+    try:
+        warmer_module = importlib.import_module("jiosaavn.plugins.cache_warmer")
+        warmer_task = warmer_module.start_warmer(bot)
+        print("✅ Cache warmer loop registered", flush=True)
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Cache warmer failed to start: {e}")
+
     print("✅ Bot and Assistant both started!", flush=True)
 
     await idle()
+
+    if warmer_task and not warmer_task.done():
+        warmer_task.cancel()
 
     await bot.stop()
     await assistant.stop()
