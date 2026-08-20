@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # ---- pacing (deliberately slow: datacenter IPs get flagged for bursts) ----
 MIN_GAP = 300            # 5 min between downloads
 MAX_GAP = 400            # up to 10 min
-MAX_PER_RUN = 12         # new tracks per automatic cycle
+MAX_PER_RUN = 32         # new tracks per automatic cycle
 CYCLE_REST = 1800        # 1 hr between cycles
 ARTIST_LIMIT = 15        # tracks pulled per artist
 MAX_LINES = 500          # max songs in a multi-line /warm
