@@ -104,6 +104,13 @@ VC_CLOSED_MSG = (
 )
 
 
+def clear_chat_state(chat_id: int):
+    """Drops every trace of a finished session for this chat."""
+    active_chats.discard(chat_id)
+    paused_chats.discard(chat_id)
+    now_playing_song.pop(chat_id, None)
+
+
 async def ensure_assistant_in_chat(client: Bot, chat_id: int) -> bool:
     try:
         assistant_id = (await assistant_client.app.get_me()).id
@@ -258,6 +265,9 @@ async def monitor_playback(chat_id: int, filepath: str):
             if chat_id not in active_calls:
                 logger.info(f"🔍 MONITOR: chat {chat_id} left the call during playback")
                 monitor_tasks.pop(chat_id, None)
+                cancel_prefetch(chat_id)
+                queues[chat_id].clear()
+                clear_chat_state(chat_id)
                 return
 
         logger.info(f"🔍 MONITOR: track finished in chat {chat_id}, moving to next")
@@ -473,9 +483,7 @@ async def play_next(chat_id: int):
 
         logger.info(f"📭 Queue empty for chat {chat_id}, leaving call")
         cancel_prefetch(chat_id)
-        active_chats.discard(chat_id)
-        paused_chats.discard(chat_id)
-        now_playing_song.pop(chat_id, None)
+        clear_chat_state(chat_id)
         try:
             await assistant_client.call_py.leave_call(chat_id)
         except Exception:
@@ -777,9 +785,7 @@ async def cb_skip(client: Bot, callback: CallbackQuery):
         cancel_prefetch(chat_id)
         try:
             await assistant_client.call_py.leave_call(chat_id)
-            active_chats.discard(chat_id)
-            paused_chats.discard(chat_id)
-            now_playing_song.pop(chat_id, None)
+            clear_chat_state(chat_id)
         except Exception:
             pass
         old_msg = now_playing_msg.pop(chat_id, None)
@@ -804,9 +810,7 @@ async def cb_stop(client: Bot, callback: CallbackQuery):
 
     stopper = user_mention(callback)
     queues[chat_id].clear()
-    active_chats.discard(chat_id)
-    paused_chats.discard(chat_id)
-    now_playing_song.pop(chat_id, None)
+    clear_chat_state(chat_id)
     cancel_monitor(chat_id)
     cancel_prefetch(chat_id)
 
@@ -900,9 +904,7 @@ async def voice_skip(client: Bot, message: Message):
         cancel_prefetch(chat_id)
         try:
             await assistant_client.call_py.leave_call(chat_id)
-            active_chats.discard(chat_id)
-            paused_chats.discard(chat_id)
-            now_playing_song.pop(chat_id, None)
+            clear_chat_state(chat_id)
         except Exception:
             pass
         return
@@ -920,9 +922,7 @@ async def voice_stop(client: Bot, message: Message):
         return
 
     queues[chat_id].clear()
-    active_chats.discard(chat_id)
-    paused_chats.discard(chat_id)
-    now_playing_song.pop(chat_id, None)
+    clear_chat_state(chat_id)
     cancel_monitor(chat_id)
     cancel_prefetch(chat_id)
 
