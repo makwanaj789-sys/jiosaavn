@@ -93,6 +93,18 @@ class Database:
             {"$set": {key: value}}
         )
 
+    async def delete_user(self, user_id: int):
+        """Used by broadcast to drop users who blocked or deleted the bot."""
+        await self.user_collection.delete_one({"id": user_id})
+
+    async def get_all_users(self):
+        """All stored user IDs — used for broadcasting."""
+        return [
+            doc["id"]
+            async for doc in self.user_collection.find({}, {"id": 1})
+            if doc.get("id")
+        ]
+
     # =========================================================
     # SONG DATABASE
     # =========================================================
@@ -179,6 +191,18 @@ class Database:
             },
             upsert=True
         )
+
+    async def delete_group(self, group_id: int):
+        """Used by broadcast to drop groups the bot was removed from."""
+        await self.group_collection.delete_one({"id": group_id})
+
+    async def get_all_groups(self):
+        """All stored group IDs — used for broadcasting."""
+        return [
+            doc["id"]
+            async for doc in self.group_collection.find({}, {"id": 1})
+            if doc.get("id")
+        ]
 
     # =========================================================
     # ADMIN STATISTICS
