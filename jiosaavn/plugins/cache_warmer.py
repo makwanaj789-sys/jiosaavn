@@ -23,7 +23,7 @@ MAX_GAP = 420        # up to 7 min
 MAX_PER_RUN = 12     # new tracks per automatic cycle
 CYCLE_REST = 3600    # 1 hr between cycles
 ARTIST_LIMIT = 15    # tracks pulled per artist
-MAX_LINES = 25       # max songs in a multi-line /warm
+MAX_LINES = 500       # max songs in a multi-line /warm
 
 COOKIES = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
