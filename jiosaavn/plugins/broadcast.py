@@ -24,9 +24,8 @@ logger = logging.getLogger(__name__)
 SEND_DELAY = 0.12        # ~8 messages/sec — safely under Telegram's limits
 PROGRESS_EVERY = 25      # update the status message this often
 
-# 🔒 Never delete anything from the database unless this is deliberately
-# turned on. A failed send usually means "couldn't reach right now",
-# not "this user is gone forever".
+# 🔒 Never delete anything from the database unless deliberately enabled.
+# A failed send usually means "couldn't reach right now", not "gone forever".
 AUTO_REMOVE_DEAD = False
 
 # Genuinely unreachable — the account blocked the bot or was deleted
@@ -211,20 +210,22 @@ async def start_broadcast(client: Bot, message: Message, mode: str):
         return
 
     try:
-        if mode == "users":
-            chat_ids = await client.db.get_all_users()
-            target, is_group = "Users", False
-        elif mode == "groups":
+        if mode == "groups":
             chat_ids = await client.db.get_all_groups()
             target, is_group = "Groups", True
-        else:
+        elif mode == "all":
             users = await client.db.get_all_users()
             groups = await client.db.get_all_groups()
             chat_ids = users + groups
             target, is_group = "Everyone", False
+        else:
+            chat_ids = await client.db.get_all_users()
+            target, is_group = "Users", False
     except Exception as e:
         await message.reply(f"**◈ ᴇʀʀᴏʀ ◈**\n\n>`{e}`")
         return
+
+    logger.info(f"📣 BROADCAST target={target} recipients={len(chat_ids)} ids={chat_ids[:5]}")
 
     if not chat_ids:
         await message.reply(
@@ -252,19 +253,30 @@ async def start_broadcast(client: Bot, message: Message, mode: str):
     )
 
 
-@Bot.on_message(filters.command("broadcast") & filters.private & filters.user(int(OWNER_ID)))
-async def broadcast_users(client: Bot, message: Message):
-    await start_broadcast(client, message, "users")
+# =====================================================================
+# COMMAND ROUTER
+# One handler reads the actual command word, so there is no ambiguity
+# between /broadcast, /broadcastgroups and /broadcastall.
+# =====================================================================
 
+@Bot.on_message(
+    filters.command(["broadcast", "broadcastgroups", "broadcastall"])
+    & filters.private
+    & filters.user(int(OWNER_ID))
+)
+async def broadcast_router(client: Bot, message: Message):
+    cmd = message.command[0].lower() if message.command else "broadcast"
 
-@Bot.on_message(filters.command("broadcastgroups") & filters.private & filters.user(int(OWNER_ID)))
-async def broadcast_groups(client: Bot, message: Message):
-    await start_broadcast(client, message, "groups")
+    if cmd == "broadcastgroups":
+        mode = "groups"
+    elif cmd == "broadcastall":
+        mode = "all"
+    else:
+        mode = "users"
 
+    logger.info(f"📣 BROADCAST requested: cmd='{cmd}' → mode='{mode}'")
 
-@Bot.on_message(filters.command("broadcastall") & filters.private & filters.user(int(OWNER_ID)))
-async def broadcast_all(client: Bot, message: Message):
-    await start_broadcast(client, message, "all")
+    await start_broadcast(client, message, mode)
 
 
 @Bot.on_callback_query(filters.regex(r"^bc_cancel$"))
