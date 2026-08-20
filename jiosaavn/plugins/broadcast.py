@@ -24,19 +24,24 @@ logger = logging.getLogger(__name__)
 SEND_DELAY = 0.12        # ~8 messages/sec — safely under Telegram's limits
 PROGRESS_EVERY = 25      # update the status message this often
 
-# Errors that mean the chat is gone for good — clean it out of the DB
+# 🔒 Never delete anything from the database unless this is deliberately
+# turned on. A failed send usually means "couldn't reach right now",
+# not "this user is gone forever".
+AUTO_REMOVE_DEAD = False
+
+# Genuinely unreachable — the account blocked the bot or was deleted
 DEAD_CHAT = (
     UserIsBlocked,
     InputUserDeactivated,
     UserDeactivated,
-    PeerIdInvalid,
-    ChannelPrivate,
 )
 
-# Errors that are temporary or permission-related — keep the chat, just skip
+# Temporary, permission, or peer-resolution issues — always keep the chat
 SKIP_CHAT = (
     ChatWriteForbidden,
     ChatAdminRequired,
+    PeerIdInvalid,
+    ChannelPrivate,
 )
 
 _running = False
@@ -63,38 +68,51 @@ def fmt_time(seconds: float) -> str:
     return f"{s}s"
 
 
-def progress_text(target: str, done: int, total: int, sent: int, failed: int, removed: int, elapsed: float):
+def progress_text(target, done, total, sent, failed, removed, elapsed):
     pct = int((done / total) * 100) if total else 0
     filled = pct // 10
     bar = "█" * filled + "░" * (10 - filled)
 
-    return (
+    text = (
         f"**◈ ʙʀᴏᴀᴅᴄᴀꜱᴛɪɴɢ ◈**\n\n"
         f">{E_MEGA} Target **{target}**\n"
         f">`{bar}` `{pct}%`\n"
         f">{E_NEXT} Progress `{done}/{total}`\n"
         f">{E_CHECK} Sent `{sent}`\n"
         f">{E_STOP} Failed `{failed}`\n"
-        f">{E_SKIP} Removed `{removed}`\n"
-        f">{E_SHUFFLE} Elapsed `{fmt_time(elapsed)}`"
     )
 
+    if AUTO_REMOVE_DEAD:
+        text += f">{E_SKIP} Removed `{removed}`\n"
 
-def summary_text(target: str, total: int, sent: int, failed: int, removed: int, elapsed: float, stopped: bool):
+    text += f">{E_SHUFFLE} Elapsed `{fmt_time(elapsed)}`"
+    return text
+
+
+def summary_text(target, total, sent, failed, removed, elapsed, stopped):
     head = "◈ ʙʀᴏᴀᴅᴄᴀꜱᴛ ꜱᴛᴏᴘᴘᴇᴅ ◈" if stopped else "◈ ʙʀᴏᴀᴅᴄᴀꜱᴛ ᴄᴏᴍᴘʟᴇᴛᴇ ◈"
 
-    return (
+    text = (
         f"**{head}**\n\n"
         f">{E_MEGA} Target **{target}**\n"
         f">{E_CASSETTE} Total `{total}`\n"
         f">{E_CHECK} Delivered `{sent}`\n"
         f">{E_STOP} Failed `{failed}`\n"
-        f">{E_SKIP} Removed from DB `{removed}`\n"
-        f">{E_SHUFFLE} Took `{fmt_time(elapsed)}`"
     )
 
+    if AUTO_REMOVE_DEAD and removed:
+        text += f">{E_SKIP} Removed from DB `{removed}`\n"
 
-async def run_broadcast(client: Bot, status: Message, source: Message, chat_ids: list, target: str, is_group: bool):
+    text += f">{E_SHUFFLE} Took `{fmt_time(elapsed)}`"
+
+    if failed and not AUTO_REMOVE_DEAD:
+        text += f"\n\n__{E_SPARKLE} Nothing was deleted — failures are kept for the next try__"
+
+    return text
+
+
+async def run_broadcast(client: Bot, status: Message, source: Message,
+                        chat_ids: list, target: str, is_group: bool):
     global _running, _cancel
 
     total = len(chat_ids)
@@ -110,7 +128,7 @@ async def run_broadcast(client: Bot, status: Message, source: Message, chat_ids:
             sent += 1
 
         except FloodWait as e:
-            # Telegram is telling us to slow down — wait it out, then retry once
+            # Telegram is asking us to slow down — wait it out, then retry once
             logger.warning(f"BROADCAST: FloodWait {e.value}s")
             await asyncio.sleep(e.value + 1)
             try:
@@ -121,17 +139,19 @@ async def run_broadcast(client: Bot, status: Message, source: Message, chat_ids:
 
         except DEAD_CHAT:
             failed += 1
-            removed += 1
-            try:
-                if is_group:
-                    await client.db.delete_group(chat_id)
-                else:
-                    await client.db.delete_user(chat_id)
-            except Exception:
-                pass
+            if AUTO_REMOVE_DEAD:
+                removed += 1
+                try:
+                    if is_group:
+                        await client.db.delete_group(chat_id)
+                    else:
+                        await client.db.delete_user(chat_id)
+                except Exception:
+                    pass
 
-        except SKIP_CHAT:
+        except SKIP_CHAT as e:
             failed += 1
+            logger.info(f"BROADCAST: skipped {chat_id} — {type(e).__name__}")
 
         except Exception as e:
             failed += 1
@@ -140,7 +160,8 @@ async def run_broadcast(client: Bot, status: Message, source: Message, chat_ids:
         if index % PROGRESS_EVERY == 0 or index == total:
             try:
                 await status.edit_text(
-                    progress_text(target, index, total, sent, failed, removed, time.time() - started),
+                    progress_text(target, index, total, sent, failed,
+                                  removed, time.time() - started),
                     reply_markup=cancel_markup()
                 )
             except Exception:
@@ -162,7 +183,7 @@ async def run_broadcast(client: Bot, status: Message, source: Message, chat_ids:
     except Exception:
         pass
 
-    logger.info(f"📣 BROADCAST done — {sent}/{total} sent, {failed} failed, {removed} removed")
+    logger.info(f"📣 BROADCAST done — {sent}/{total} sent, {failed} failed")
 
 
 async def start_broadcast(client: Bot, message: Message, mode: str):
@@ -226,7 +247,8 @@ async def start_broadcast(client: Bot, message: Message, mode: str):
     _cancel = False
 
     asyncio.create_task(
-        run_broadcast(client, status, message.reply_to_message, chat_ids, target, is_group)
+        run_broadcast(client, status, message.reply_to_message,
+                      chat_ids, target, is_group)
     )
 
 
