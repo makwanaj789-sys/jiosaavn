@@ -9,7 +9,7 @@ from . import favorites
 from . import settings
 from . import voice_chat
 from . import cache_warmer
-
+from . import broadcast
 
 # 🔥 SABHI FILES KO __all__ MEIN ADD KARO
 __all__ = [
@@ -24,6 +24,8 @@ __all__ = [
     'settings',
     'voice_chat',
     'cache_warmer',
+    'broadcast',
+    
 ]
 
 # Debug ke liye (optional)
