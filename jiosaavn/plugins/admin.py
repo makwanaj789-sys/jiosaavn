@@ -277,7 +277,9 @@ def edit_button_menu():
     filters.private
     & (filters.text | filters.photo | filters.video)
     & ~filters.command([
-        "admin", "cancel", "start", "settings", "help", "about"
+        "admin", "cancel", "start", "settings", "help", "about",
+        "broadcast", "broadcastgroups", "broadcastall",
+        "warm", "warmer", "myfavorites", "refreshcard"
     ]),
     group=-5
 )
