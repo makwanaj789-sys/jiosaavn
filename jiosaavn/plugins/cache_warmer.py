@@ -18,12 +18,13 @@ from api.cache import CacheManager
 logger = logging.getLogger(__name__)
 
 # ---- pacing (deliberately slow: datacenter IPs get flagged for bursts) ----
-MIN_GAP = 240        # 4 min between downloads
-MAX_GAP = 420        # up to 7 min
-MAX_PER_RUN = 12     # new tracks per automatic cycle
-CYCLE_REST = 3600    # 1 hr between cycles
-ARTIST_LIMIT = 15    # tracks pulled per artist
-MAX_LINES = 500       # max songs in a multi-line /warm
+MIN_GAP = 300            # 5 min between downloads
+MAX_GAP = 600            # up to 10 min
+MAX_PER_RUN = 12         # new tracks per automatic cycle
+CYCLE_REST = 3600        # 1 hr between cycles
+ARTIST_LIMIT = 15        # tracks pulled per artist
+MAX_LINES = 500          # max songs in a multi-line /warm
+RESULTS_PER_SONG = 3     # search results cached per song line
 
 COOKIES = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -323,7 +324,10 @@ async def manual_loop(client: Bot):
                     song = await helper.get_or_create(item["video_id"])
 
                 if song:
-                    logger.info(f"✅ MANUAL: cached '{song['title']}'")
+                    logger.info(
+                        f"✅ MANUAL: cached '{song['title']}' "
+                        f"({len(manual_queue)} left)"
+                    )
                 else:
                     logger.warning(f"⚠️ MANUAL: failed '{item['title']}'")
 
@@ -360,10 +364,11 @@ async def warm_artist(client: Bot, message: Message):
             f"**◈ ᴡʜᴀᴛ ꜱʜᴏᴜʟᴅ ɪ ᴡᴀʀᴍ ◈**\n\n"
             f">{E_USER} One line = artist, top `{ARTIST_LIMIT}` tracks\n"
             f">`/warm Arijit Singh`\n\n"
-            f">{E_TRACK} Many lines = one track each\n"
+            f">{E_TRACK} Many lines = `{RESULTS_PER_SONG}` results each\n"
             f">`/warm Satranga Animal`\n"
             f">`Tauba Tauba Bad Newz`\n"
-            f">`O Maahi Dunki`"
+            f">`O Maahi Dunki`\n\n"
+            f"__{E_SPARKLE} Up to `{MAX_LINES}` lines per request__"
         )
         return
 
@@ -379,34 +384,39 @@ async def warm_artist(client: Bot, message: Message):
         queued = 0
         already = 0
         missed = 0
+        skipped_lines = 0
 
         if len(lines) > 1:
-            # ---- Song list mode: top result for each line ----
+            # ---- Song list mode: top N results for each line ----
+            skipped_lines = max(0, len(lines) - MAX_LINES)
+
             for line in lines[:MAX_LINES]:
                 try:
                     resp = await engine.search(line)
-                    results = resp.get("results") or []
+                    results = (resp.get("results") or [])[:RESULTS_PER_SONG]
 
-                    if not results or not results[0].get("id"):
+                    if not results:
                         missed += 1
                         continue
 
-                    r = results[0]
-                    vid = r["id"]
+                    for r in results:
+                        vid = r.get("id")
+                        if not vid:
+                            continue
 
-                    if await cache.get(vid):
-                        already += 1
-                        continue
+                        if await cache.get(vid):
+                            already += 1
+                            continue
 
-                    if already_queued(vid):
-                        continue
+                        if already_queued(vid):
+                            continue
 
-                    manual_queue.append({
-                        "video_id": vid,
-                        "title": r.get("title", "Unknown"),
-                        "uploader": r.get("uploader", "Unknown"),
-                    })
-                    queued += 1
+                        manual_queue.append({
+                            "video_id": vid,
+                            "title": r.get("title", "Unknown"),
+                            "uploader": r.get("uploader", "Unknown"),
+                        })
+                        queued += 1
 
                 except Exception as e:
                     logger.warning(f"warm: line '{line}' failed: {e}")
@@ -460,7 +470,8 @@ async def warm_artist(client: Bot, message: Message):
 
         ensure_manual_worker(client)
 
-        eta = (queued * (MIN_GAP + MAX_GAP) // 2) // 60
+        eta_min = (len(manual_queue) * (MIN_GAP + MAX_GAP) // 2) // 60
+        eta = f"{eta_min // 60}h {eta_min % 60}m" if eta_min >= 60 else f"{eta_min}m"
 
         text = (
             f"**◈ ᴡᴀʀᴍɪɴɢ ǫᴜᴇᴜᴇᴅ ◈**\n\n"
@@ -472,8 +483,12 @@ async def warm_artist(client: Bot, message: Message):
         if missed:
             text += f">{E_STOP} Not found `{missed}`\n"
 
+        if skipped_lines:
+            text += f">{E_SKIP} Over limit, ignored `{skipped_lines}`\n"
+
         text += (
-            f">{E_SHUFFLE} Roughly `{eta}` min to finish\n\n"
+            f">{E_CASSETTE} Queue total `{len(manual_queue)}`\n"
+            f">{E_SHUFFLE} Roughly `{eta}` to finish\n\n"
             f"__{E_SPARKLE} Automatic warming pauses until this finishes__"
         )
 
@@ -482,6 +497,19 @@ async def warm_artist(client: Bot, message: Message):
     except Exception as e:
         logger.error(f"warm_artist error: {e}")
         await status.edit_text(f"**◈ ᴇʀʀᴏʀ ◈**\n\n>`{e}`")
+
+
+@Bot.on_message(filters.command("warmstop") & filters.user(int(OWNER_ID)))
+async def warm_stop(client: Bot, message: Message):
+    """Clears the pending manual queue."""
+    count = len(manual_queue)
+    manual_queue.clear()
+
+    await message.reply(
+        f"**◈ ǫᴜᴇᴜᴇ ᴄʟᴇᴀʀᴇᴅ ◈**\n\n"
+        f">{E_STOP} Dropped `{count}` pending tracks\n"
+        f">{E_CHECK} Anything already cached stays cached"
+    )
 
 
 # =====================================================================
@@ -535,7 +563,7 @@ async def warmer_text(client: Bot) -> str:
         f">{E_NEXT} Manual queue `{len(manual_queue)}`\n"
         f">{mode}\n"
         f">{E_SHUFFLE} Gap `{MIN_GAP//60}–{MAX_GAP//60}` min · rest `{CYCLE_REST//60}` min\n\n"
-        f"__{E_SPARKLE} `/warm <artist>` or a list of songs, one per line__"
+        f"__{E_SPARKLE} `/warm` to queue · `/warmstop` to clear__"
     )
 
 
