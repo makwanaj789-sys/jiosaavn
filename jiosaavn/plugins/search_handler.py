@@ -16,7 +16,7 @@ from pyrogram.types import (
 
 logger = logging.getLogger(__name__)
 
-private_search_filter = (filters.text & filters.incoming & filters.private)
+private_search_filter = (filters.text & filters.incoming & filters.private & ~filters.regex(r"^/"))
 group_search_filter = (filters.command("am") & filters.incoming)
 
 
