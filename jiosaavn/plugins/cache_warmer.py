@@ -18,10 +18,10 @@ from api.cache import CacheManager
 logger = logging.getLogger(__name__)
 
 # ---- pacing (deliberately slow: datacenter IPs get flagged for bursts) ----
-MIN_GAP = 180            # 5 min between downloads
-MAX_GAP = 240            # up to 10 min
-MAX_PER_RUN = 22         # new tracks per automatic cycle
-CYCLE_REST = 1800        # 1 hr between cycles
+MIN_GAP = 180            # 3 min between downloads
+MAX_GAP = 240            # up to 4 min
+MAX_PER_RUN = 32         # new tracks per automatic cycle
+CYCLE_REST = 1800        # 30 min between cycles
 ARTIST_LIMIT = 15        # tracks pulled per artist
 MAX_LINES = 500          # max songs in a multi-line /warm
 RESULTS_PER_SONG = 3     # search results cached per song line
@@ -187,16 +187,27 @@ async def discover_from_user_searches(db):
 
 
 # =====================================================================
-# AUTOMATIC WARMING
+# VOICE CHAT CHECK
 # =====================================================================
 
-def voice_chat_busy() -> bool:
+async def voice_chat_busy() -> bool:
+    """
+    Checks live calls rather than the local set — the set can go stale
+    if a call ends unexpectedly.
+    """
     try:
         from jiosaavn.plugins import voice_chat
-        return bool(voice_chat.active_chats)
+        if not voice_chat.assistant_client or not voice_chat.assistant_client.call_py:
+            return False
+        calls = await voice_chat.assistant_client.call_py.calls
+        return bool(calls)
     except Exception:
         return False
 
+
+# =====================================================================
+# AUTOMATIC WARMING
+# =====================================================================
 
 async def warmer_loop(client: Bot):
     await asyncio.sleep(120)
@@ -251,7 +262,7 @@ async def warmer_loop(client: Bot):
                     logger.info("🔥 WARMER: manual queue started, pausing cycle")
                     break
 
-                if voice_chat_busy():
+                if await voice_chat_busy():
                     logger.info("🔥 WARMER: voice chat live, pausing")
                     await asyncio.sleep(300)
                     continue
@@ -308,7 +319,7 @@ async def manual_loop(client: Bot):
         while manual_queue:
             item = manual_queue.pop(0)
 
-            if voice_chat_busy():
+            if await voice_chat_busy():
                 manual_queue.insert(0, item)
                 logger.info("🎯 MANUAL: voice chat live, pausing")
                 await asyncio.sleep(300)
@@ -549,7 +560,9 @@ async def warmer_text(client: Bot) -> str:
 
     state = f"{E_CHECK} **ᴏɴ**" if enabled else f"{E_STOP} **ᴏꜰꜰ**"
 
-    if manual_busy():
+    if await voice_chat_busy():
+        mode = f"{E_PHONE} Voice chat live — warming paused"
+    elif manual_busy():
         mode = f"{E_DOWNLOAD} Manual warming — automatic paused"
     elif enabled:
         mode = f"{E_SHUFFLE} Automatic warming active"
