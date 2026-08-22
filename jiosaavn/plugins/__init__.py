@@ -10,6 +10,7 @@ from . import settings
 from . import voice_chat
 from . import cache_warmer
 from . import broadcast
+from . import voice_search
 
 # 🔥 SABHI FILES KO __all__ MEIN ADD KARO
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     'voice_chat',
     'cache_warmer',
     'broadcast',
+    'voice_search',
     
 ]
 
