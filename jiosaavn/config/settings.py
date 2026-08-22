@@ -3,6 +3,7 @@ from os import getenv
 API_ID = getenv("API_ID")
 API_HASH = getenv("API_HASH")
 BOT_TOKEN = getenv("BOT_TOKEN")
+GROQ_API_KEY = getenv("GROQ_API_KEY")
 # Bot Owner
 OWNER_ID = 732582697
 BOT_COMMANDS = (
