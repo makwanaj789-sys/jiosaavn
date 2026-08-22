@@ -26,13 +26,8 @@ async def transcribe(filepath: str) -> str | None:
     try:
         data = aiohttp.FormData()
         data.add_field("model", MODEL)
-        # A hint helps Whisper handle Hinglish song names far better
-        data.add_field(
-            "prompt",
-            "The user is naming a song, artist, or movie. "
-            "Names may be Hindi, Punjabi, or English."
-        )
         data.add_field("temperature", "0")
+        data.add_field("language", "hi")
         data.add_field(
             "file",
             open(filepath, "rb"),
