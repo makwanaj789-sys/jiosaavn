@@ -279,7 +279,7 @@ def edit_button_menu():
     & ~filters.command([
         "admin", "cancel", "start", "settings", "help", "about",
         "broadcast", "broadcastgroups", "broadcastall",
-        "warm", "warmer", "myfavorites", "refreshcard"
+        "warm", "warmer", "myfavorites", "refreshcard","vs", "voicesearch", "warmstop"
     ]),
     group=-5
 )
