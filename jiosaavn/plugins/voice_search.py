@@ -7,20 +7,19 @@ from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from jiosaavn.bot import Bot
 from jiosaavn.emojis import *
-from api.transcribe import transcribe
+from api.transcribe import transcribe, refine_query
 from api.search_engine import SearchEngine
 
 logger = logging.getLogger(__name__)
 
-# Telegram voice notes are small, but guard against odd uploads
 MAX_DURATION = 60      # seconds
 MAX_RESULTS = 8
 
 
 async def handle_voice(client: Bot, message: Message, quoted: Message):
     """
-    Downloads a voice note, transcribes it, and shows search results.
-    `quoted` is the message carrying the audio (may be the same message).
+    Downloads a voice note, transcribes it, cleans up the query,
+    and shows search results.
     """
     voice = quoted.voice or quoted.audio
 
@@ -48,9 +47,9 @@ async def handle_voice(client: Bot, message: Message, quoted: Message):
             file_name=os.path.join(tempfile.gettempdir(), f"vs_{quoted.id}.ogg")
         )
 
-        text = await transcribe(filepath)
+        heard = await transcribe(filepath)
 
-        if not text:
+        if not heard:
             await status.edit_text(
                 f"**◈ ᴄᴏᴜʟᴅɴ'ᴛ ʜᴇᴀʀ ᴛʜᴀᴛ ◈**\n\n"
                 f">{E_STOP} Try again in a quieter spot,\n"
@@ -58,28 +57,34 @@ async def handle_voice(client: Bot, message: Message, quoted: Message):
             )
             return
 
-        await status.edit_text(f"{E_SEARCH} **{text}**")
+        query = await refine_query(heard)
+
+        await status.edit_text(f"{E_SEARCH} **{query}**")
 
         # Track it like any other search
         try:
             await client.db.add_search(
                 user_id=message.from_user.id,
                 chat_id=message.chat.id,
-                query=text
+                query=query
             )
         except Exception:
             pass
 
         engine = SearchEngine()
-        response = await engine.search(text)
+        response = await engine.search(query)
         results = (response.get("results") or [])[:MAX_RESULTS]
 
         if not results:
-            await status.edit_text(
+            text = (
                 f"**◈ ɴᴏ ʀᴇꜱᴜʟᴛꜱ ◈**\n\n"
-                f">{E_SPEAK} I heard **{text}**\n"
-                f">{E_STOP} but found nothing for it."
+                f">{E_SPEAK} Heard **{heard}**\n"
             )
+            if query != heard:
+                text += f">{E_SEARCH} Searched **{query}**\n"
+            text += f">{E_STOP} Nothing found for it."
+
+            await status.edit_text(text)
             return
 
         buttons = []
@@ -113,7 +118,7 @@ async def handle_voice(client: Bot, message: Message, quoted: Message):
 
         await status.edit_text(
             f"**◈ ʜᴇᴀʀᴅ ʏᴏᴜ ◈**\n\n"
-            f">{E_SPEAK} **{text}**\n"
+            f">{E_SPEAK} **{query}**\n"
             f">{E_CASSETTE} Found `{len(buttons) - 1}` tracks\n\n"
             f"__{E_SPARKLE} Tap any track to download__",
             reply_markup=InlineKeyboardMarkup(buttons)
